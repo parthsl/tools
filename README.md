@@ -5,4 +5,6 @@ Various important tools and scripts
 
 - RAPL_Energy_measurement : Measure instaneous package/cpu energy consumption using either sysfs, perf_event or using msr.
 
-- EAS_patches : Morten Rasmussen patches for EAS on arm board. (https://patchwork.kernel.org/project/LKML/list/?submitter=48271&order=-date&page=1i "LKML Patchworks").
+- EAS_patches : Morten Rasmussen patches for EAS on arm board. [LKML Patches](https://patchwork.kernel.org/project/LKML/list/?submitter=48271&order=-date&page=1i).
+
+- Pandaboard_omap4 : Developement related to Pandaboard with OMAP-4 versions. To build kernel refer [here](https://github.com/RobertCNelson/armv7-multiplatform).

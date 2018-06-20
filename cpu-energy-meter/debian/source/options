@@ -1,0 +1,2 @@
+tar-ignore = ".vendor/"
+tar-ignore = ".scripts/"

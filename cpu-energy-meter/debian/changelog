@@ -1,0 +1,5 @@
+cpu-energy-meter (1.0-1) xenial; urgency=medium
+
+  * Initial release.
+
+ -- Philipp Wendler <debian@philippwendler.de>  Wed, 31 Jan 2018 14:00:59 +0100
