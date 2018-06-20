@@ -10,3 +10,8 @@ Various important tools and scripts
 - Pandaboard_omap4 : Developement related to Pandaboard with OMAP-4 versions. To build kernel refer [here](https://github.com/RobertCNelson/armv7-multiplatform).
 
 - rt-app : Workload based in daily activites on mobiles and practical applications. Used in EAS development.
+
+- TSP_project : Tools and commands used to optimize TSP based algo on Intel Xeon Phi and IBM Power arch.
+
+- Bash tools: [liquid prompt] (https://github.com/nojhan/liquidprompt).
+              [Fuzzy finder ] (https://github.com/junegunn/fzf).
