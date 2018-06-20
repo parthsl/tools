@@ -1,0 +1,55 @@
+diff --git a/kernel/sched/core.c b/kernel/sched/core.c
+index a41bb32..57c9eb5 100644
+--- a/kernel/sched/core.c
++++ b/kernel/sched/core.c
+@@ -2138,7 +2138,7 @@ void wake_up_new_task(struct task_struct *p)
+ #endif
+ 
+ 	rq = __task_rq_lock(p);
+-	activate_task(rq, p, 0);
++	activate_task(rq, p, ENQUEUE_WAKEUP_NEW);
+ 	p->on_rq = TASK_ON_RQ_QUEUED;
+ 	trace_sched_wakeup_new(p, true);
+ 	check_preempt_curr(rq, p, WF_FORK);
+diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
+index b8627c6..bb49499 100644
+--- a/kernel/sched/fair.c
++++ b/kernel/sched/fair.c
+@@ -4297,7 +4297,8 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
+ {
+ 	struct cfs_rq *cfs_rq;
+ 	struct sched_entity *se = &p->se;
+-	int task_new = !(flags & ENQUEUE_WAKEUP);
++	int task_new = flags & ENQUEUE_WAKEUP_NEW;
++	int task_wakeup = flags & ENQUEUE_WAKEUP;
+ 
+ 	for_each_sched_entity(se) {
+ 		if (se->on_rq)
+@@ -4341,14 +4342,11 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
+ 		 * load balancing, but in these cases it seems wise to trigger
+ 		 * as single request after load balancing is done.
+ 		 *
+-		 * XXX: how about fork()? Do we need a special flag/something
+-		 *      to tell if we are here after a fork() (wakeup_task_new)?
+-		 *
+ 		 * Also, we add a margin (same ~20% used for the tipping point)
+ 		 * to our request to provide some head room if p's utilization
+ 		 * further increases.
+ 		 */
+-		if (sched_energy_freq() && !task_new) {
++		if (sched_energy_freq() && (task_new || task_wakeup)) {
+ 			unsigned long req_cap = get_cpu_usage(cpu_of(rq));
+ 
+ 			req_cap = req_cap * capacity_margin
+diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
+index 1327dc7..85be5d8 100644
+--- a/kernel/sched/sched.h
++++ b/kernel/sched/sched.h
+@@ -1206,6 +1206,7 @@ static const u32 prio_to_wmult[40] = {
+ #define ENQUEUE_WAKING		0
+ #endif
+ #define ENQUEUE_REPLENISH	8
++#define ENQUEUE_WAKEUP_NEW	16
+ 
+ #define DEQUEUE_SLEEP		1
+ 

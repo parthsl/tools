@@ -1,0 +1,68 @@
+diff --git a/kernel/sched/cpufreq_sched.c b/kernel/sched/cpufreq_sched.c
+index 5020f24..2968f3a 100644
+--- a/kernel/sched/cpufreq_sched.c
++++ b/kernel/sched/cpufreq_sched.c
+@@ -203,6 +203,18 @@ void cpufreq_sched_set_cap(int cpu, unsigned long capacity)
+ 	return;
+ }
+ 
++static inline void set_sched_energy_freq(void)
++{
++	if (!sched_energy_freq())
++		static_key_slow_inc(&__sched_energy_freq);
++}
++
++static inline void clear_sched_energy_freq(void)
++{
++	if (sched_energy_freq())
++		static_key_slow_dec(&__sched_energy_freq);
++}
++
+ static int cpufreq_sched_start(struct cpufreq_policy *policy)
+ {
+ 	struct gov_data *gd;
+@@ -243,6 +255,7 @@ static int cpufreq_sched_start(struct cpufreq_policy *policy)
+ 
+ 	policy->governor_data = gd;
+ 	gd->policy = policy;
++	set_sched_energy_freq();
+ 	return 0;
+ 
+ err:
+@@ -254,6 +267,7 @@ static int cpufreq_sched_stop(struct cpufreq_policy *policy)
+ {
+ 	struct gov_data *gd = policy->governor_data;
+ 
++	clear_sched_energy_freq();
+ 	if (cpufreq_driver_might_sleep()) {
+ 		kthread_stop(gd->task);
+ 	}
+diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
+index f7cb6c9..d395bc9 100644
+--- a/kernel/sched/fair.c
++++ b/kernel/sched/fair.c
+@@ -4282,6 +4282,7 @@ static inline void hrtick_update(struct rq *rq)
+ #endif
+ 
+ static bool cpu_overutilized(int cpu);
++struct static_key __sched_energy_freq __read_mostly = STATIC_KEY_INIT_FALSE;
+ 
+ /*
+  * The enqueue_task method is called before nr_running is
+diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
+index 30aa0c4..b5e27d9 100644
+--- a/kernel/sched/sched.h
++++ b/kernel/sched/sched.h
+@@ -1476,6 +1476,12 @@ unsigned long arch_scale_cpu_capacity(struct sched_domain *sd, int cpu)
+ }
+ #endif
+ 
++extern struct static_key __sched_energy_freq;
++static inline bool sched_energy_freq(void)
++{
++	return static_key_false(&__sched_energy_freq);
++}
++
+ #ifdef CONFIG_CPU_FREQ_GOV_SCHED
+ void cpufreq_sched_set_cap(int cpu, unsigned long util);
+ #else

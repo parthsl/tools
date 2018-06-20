@@ -1,0 +1,68 @@
+diff --git a/arch/arm/kernel/topology.c b/arch/arm/kernel/topology.c
+index 5867587..b35d3e5 100644
+--- a/arch/arm/kernel/topology.c
++++ b/arch/arm/kernel/topology.c
+@@ -276,7 +276,8 @@ void store_cpu_topology(unsigned int cpuid)
+ 
+ static inline int cpu_corepower_flags(void)
+ {
+-	return SD_SHARE_PKG_RESOURCES  | SD_SHARE_POWERDOMAIN;
++	return SD_SHARE_PKG_RESOURCES  | SD_SHARE_POWERDOMAIN | \
++	       SD_SHARE_CAP_STATES;
+ }
+ 
+ static struct sched_domain_topology_level arm_topology[] = {
+diff --git a/include/linux/sched.h b/include/linux/sched.h
+index c4d0e88..8ac2db8 100644
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
+@@ -985,6 +985,7 @@ extern void wake_up_q(struct wake_q_head *head);
+ #define SD_PREFER_SIBLING	0x1000	/* Prefer to place tasks in a sibling domain */
+ #define SD_OVERLAP		0x2000	/* sched_domains of this level overlap */
+ #define SD_NUMA			0x4000	/* cross-node balancing */
++#define SD_SHARE_CAP_STATES	0x8000  /* Domain members share capacity state */
+ 
+ #ifdef CONFIG_SCHED_SMT
+ static inline int cpu_smt_flags(void)
+diff --git a/kernel/sched/core.c b/kernel/sched/core.c
+index e09ded5..b70a5a7 100644
+--- a/kernel/sched/core.c
++++ b/kernel/sched/core.c
+@@ -5563,7 +5563,8 @@ static int sd_degenerate(struct sched_domain *sd)
+ 			 SD_BALANCE_EXEC |
+ 			 SD_SHARE_CPUCAPACITY |
+ 			 SD_SHARE_PKG_RESOURCES |
+-			 SD_SHARE_POWERDOMAIN)) {
++			 SD_SHARE_POWERDOMAIN |
++			 SD_SHARE_CAP_STATES)) {
+ 		if (sd->groups != sd->groups->next)
+ 			return 0;
+ 	}
+@@ -5595,7 +5596,8 @@ sd_parent_degenerate(struct sched_domain *sd, struct sched_domain *parent)
+ 				SD_SHARE_CPUCAPACITY |
+ 				SD_SHARE_PKG_RESOURCES |
+ 				SD_PREFER_SIBLING |
+-				SD_SHARE_POWERDOMAIN);
++				SD_SHARE_POWERDOMAIN |
++				SD_SHARE_CAP_STATES);
+ 		if (nr_node_ids == 1)
+ 			pflags &= ~SD_SERIALIZE;
+ 	}
+@@ -6256,6 +6258,7 @@ static int sched_domains_curr_level;
+  * SD_SHARE_PKG_RESOURCES - describes shared caches
+  * SD_NUMA                - describes NUMA topologies
+  * SD_SHARE_POWERDOMAIN   - describes shared power domain
++ * SD_SHARE_CAP_STATES    - describes shared capacity states
+  *
+  * Odd one out:
+  * SD_ASYM_PACKING        - describes SMT quirks
+@@ -6265,7 +6268,8 @@ static int sched_domains_curr_level;
+ 	 SD_SHARE_PKG_RESOURCES |	\
+ 	 SD_NUMA |			\
+ 	 SD_ASYM_PACKING |		\
+-	 SD_SHARE_POWERDOMAIN)
++	 SD_SHARE_POWERDOMAIN |		\
++	 SD_SHARE_CAP_STATES)
+ 
+ static struct sched_domain *
+ sd_init(struct sched_domain_topology_level *tl, int cpu)

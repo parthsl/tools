@@ -1,0 +1,59 @@
+From patchwork Tue Jul  7 18:24:16 2015
+Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Subject: [RFCv5,
+ 33/46] sched: Consider a not over-utilized energy-aware system as
+ balanced
+From: morten.rasmussen@arm.com
+X-Patchwork-Id: 6736781
+Message-Id: <1436293469-25707-34-git-send-email-morten.rasmussen@arm.com>
+To: peterz@infradead.org, mingo@redhat.com
+Cc: vincent.guittot@linaro.org, daniel.lezcano@linaro.org,
+ Dietmar Eggemann <Dietmar.Eggemann@arm.com>,
+ yuyang.du@intel.com, mturquette@baylibre.com, rjw@rjwysocki.net,
+ Juri Lelli <Juri.Lelli@arm.com>, sgurrappadi@nvidia.com,
+ pang.xunlei@zte.com.cn, linux-kernel@vger.kernel.org,
+ linux-pm@vger.kernel.org, Dietmar Eggemann <dietmar.eggemann@arm.com>
+Date: Tue,  7 Jul 2015 19:24:16 +0100
+
+From: Dietmar Eggemann <dietmar.eggemann@arm.com>
+
+In case the system operates below the tipping point indicator,
+introduced in ("sched: Add over-utilization/tipping point
+indicator"), bail out in find_busiest_group after the dst and src
+group statistics have been checked.
+
+There is simply no need to move usage around because all involved
+cpus still have spare cycles available.
+
+For an energy-aware system below its tipping point,  we rely on the
+task placement of the wakeup path. This works well for short running
+tasks.
+
+The existence of long running tasks on one of the involved cpus lets
+the system operate over its tipping point. To be able to move such
+a task (whose load can't be used to average the load among the cpus)
+from a src cpu with lower capacity than the dst_cpu, an additional
+rule has to be implemented in need_active_balance.
+
+Signed-off-by: Dietmar Eggemann <dietmar.eggemann@arm.com>
+---
+ kernel/sched/fair.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
+index 01f7337..48ecf02 100644
+--- a/kernel/sched/fair.c
++++ b/kernel/sched/fair.c
+@@ -7382,6 +7382,10 @@ static struct sched_group *find_busiest_group(struct lb_env *env)
+ 	 * this level.
+ 	 */
+ 	update_sd_lb_stats(env, &sds);
++
++	if (energy_aware() && !env->dst_rq->rd->overutilized)
++		goto out_balanced;
++
+ 	local = &sds.local_stat;
+ 	busiest = &sds.busiest_stat;
+ 

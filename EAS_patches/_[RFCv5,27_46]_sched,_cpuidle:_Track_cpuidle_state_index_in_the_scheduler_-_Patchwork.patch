@@ -1,0 +1,66 @@
+diff --git a/kernel/sched/idle.c b/kernel/sched/idle.c
+index fefcb1f..6832fa1 100644
+--- a/kernel/sched/idle.c
++++ b/kernel/sched/idle.c
+@@ -151,6 +151,7 @@ static void cpuidle_idle_call(void)
+ 
+ 	/* Take note of the planned idle state. */
+ 	idle_set_state(this_rq(), &drv->states[next_state]);
++	idle_set_state_idx(this_rq(), next_state);
+ 
+ 	/*
+ 	 * Enter the idle state previously returned by the governor decision.
+@@ -161,6 +162,7 @@ static void cpuidle_idle_call(void)
+ 
+ 	/* The cpu is no longer idle or about to enter idle. */
+ 	idle_set_state(this_rq(), NULL);
++	idle_set_state_idx(this_rq(), -1);
+ 
+ 	if (entered_state == -EBUSY)
+ 		goto use_default;
+diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
+index 9589d9e..c395559 100644
+--- a/kernel/sched/sched.h
++++ b/kernel/sched/sched.h
+@@ -701,6 +701,7 @@ struct rq {
+ #ifdef CONFIG_CPU_IDLE
+ 	/* Must be inspected within a rcu lock section */
+ 	struct cpuidle_state *idle_state;
++	int idle_state_idx;
+ #endif
+ };
+ 
+@@ -1316,6 +1317,17 @@ static inline struct cpuidle_state *idle_get_state(struct rq *rq)
+ 	WARN_ON(!rcu_read_lock_held());
+ 	return rq->idle_state;
+ }
++
++static inline void idle_set_state_idx(struct rq *rq, int idle_state_idx)
++{
++	rq->idle_state_idx = idle_state_idx;
++}
++
++static inline int idle_get_state_idx(struct rq *rq)
++{
++	WARN_ON(!rcu_read_lock_held());
++	return rq->idle_state_idx;
++}
+ #else
+ static inline void idle_set_state(struct rq *rq,
+ 				  struct cpuidle_state *idle_state)
+@@ -1326,6 +1338,15 @@ static inline struct cpuidle_state *idle_get_state(struct rq *rq)
+ {
+ 	return NULL;
+ }
++
++static inline void idle_set_state_idx(struct rq *rq, int idle_state_idx)
++{
++}
++
++static inline int idle_get_state_idx(struct rq *rq)
++{
++	return -1;
++}
+ #endif
+ 
+ extern void sysrq_sched_debug_show(void);

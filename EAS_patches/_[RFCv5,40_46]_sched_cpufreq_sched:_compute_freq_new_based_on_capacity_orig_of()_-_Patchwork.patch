@@ -1,0 +1,39 @@
+diff --git a/kernel/sched/cpufreq_sched.c b/kernel/sched/cpufreq_sched.c
+index 2968f3a..7071528 100644
+--- a/kernel/sched/cpufreq_sched.c
++++ b/kernel/sched/cpufreq_sched.c
+@@ -184,7 +184,7 @@ void cpufreq_sched_set_cap(int cpu, unsigned long capacity)
+ 		goto out;
+ 
+ 	/* Convert the new maximum capacity request into a cpu frequency */
+-	freq_new = capacity * policy->max >> SCHED_CAPACITY_SHIFT;
++	freq_new = (capacity * policy->max) / capacity_orig_of(cpu);
+ 
+ 	/* No change in frequency? Bail and return current capacity. */
+ 	if (freq_new == policy->cur)
+diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
+index d395bc9..f74e9d2 100644
+--- a/kernel/sched/fair.c
++++ b/kernel/sched/fair.c
+@@ -4625,7 +4625,7 @@ static unsigned long capacity_of(int cpu)
+ 	return cpu_rq(cpu)->cpu_capacity;
+ }
+ 
+-static unsigned long capacity_orig_of(int cpu)
++unsigned long capacity_orig_of(int cpu)
+ {
+ 	return cpu_rq(cpu)->cpu_capacity_orig;
+ }
+diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
+index b5e27d9..1327dc7 100644
+--- a/kernel/sched/sched.h
++++ b/kernel/sched/sched.h
+@@ -1476,6 +1476,8 @@ unsigned long arch_scale_cpu_capacity(struct sched_domain *sd, int cpu)
+ }
+ #endif
+ 
++unsigned long capacity_orig_of(int cpu);
++
+ extern struct static_key __sched_energy_freq;
+ static inline bool sched_energy_freq(void)
+ {

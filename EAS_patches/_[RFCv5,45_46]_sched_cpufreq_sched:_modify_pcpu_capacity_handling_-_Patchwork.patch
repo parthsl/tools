@@ -1,0 +1,13 @@
+diff --git a/kernel/sched/cpufreq_sched.c b/kernel/sched/cpufreq_sched.c
+index 06ff183..b81ac779 100644
+--- a/kernel/sched/cpufreq_sched.c
++++ b/kernel/sched/cpufreq_sched.c
+@@ -151,7 +151,7 @@ void cpufreq_sched_set_cap(int cpu, unsigned long capacity)
+ 	unsigned long capacity_max = 0;
+ 
+ 	/* update per-cpu capacity request */
+-	__this_cpu_write(pcpu_capacity, capacity);
++	per_cpu(pcpu_capacity, cpu) = capacity;
+ 
+ 	policy = cpufreq_cpu_get(cpu);
+ 	if (IS_ERR_OR_NULL(policy)) {

@@ -1,0 +1,76 @@
+From patchwork Tue Jul  7 18:24:23 2015
+Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Subject: [RFCv5, 40/46] sched/cpufreq_sched: compute freq_new based on
+ capacity_orig_of()
+From: morten.rasmussen@arm.com
+X-Patchwork-Id: 6738181
+Message-Id: <1436293469-25707-41-git-send-email-morten.rasmussen@arm.com>
+To: peterz@infradead.org, mingo@redhat.com
+Cc: vincent.guittot@linaro.org, daniel.lezcano@linaro.org,
+ Dietmar Eggemann <Dietmar.Eggemann@arm.com>,
+ yuyang.du@intel.com, mturquette@baylibre.com, rjw@rjwysocki.net,
+ Juri Lelli <Juri.Lelli@arm.com>, sgurrappadi@nvidia.com,
+ pang.xunlei@zte.com.cn, linux-kernel@vger.kernel.org,
+ linux-pm@vger.kernel.org, Juri Lelli <juri.lelli@arm.com>
+Date: Tue,  7 Jul 2015 19:24:23 +0100
+
+From: Juri Lelli <juri.lelli@arm.com>
+
+capacity is both cpu and freq scaled with EAS. We thus need to compute
+freq_new using capacity_orig_of(), so that we properly scale back the thing
+on heterogeneous architectures. In fact, capacity_orig_of() returns only
+the cpu scaled part of capacity (see update_cpu_capacity()). So, to scale
+freq_new correctly, we multiply policy->max by capacity/capacity_orig_of()
+instead of capacity/1024.
+
+cc: Ingo Molnar <mingo@redhat.com>
+cc: Peter Zijlstra <peterz@infradead.org>
+
+Signed-off-by: Juri Lelli <juri.lelli@arm.com>
+---
+ kernel/sched/cpufreq_sched.c | 2 +-
+ kernel/sched/fair.c          | 2 +-
+ kernel/sched/sched.h         | 2 ++
+ 3 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/kernel/sched/cpufreq_sched.c b/kernel/sched/cpufreq_sched.c
+index 2968f3a..7071528 100644
+--- a/kernel/sched/cpufreq_sched.c
++++ b/kernel/sched/cpufreq_sched.c
+@@ -184,7 +184,7 @@ void cpufreq_sched_set_cap(int cpu, unsigned long capacity)
+ 		goto out;
+ 
+ 	/* Convert the new maximum capacity request into a cpu frequency */
+-	freq_new = capacity * policy->max >> SCHED_CAPACITY_SHIFT;
++	freq_new = (capacity * policy->max) / capacity_orig_of(cpu);
+ 
+ 	/* No change in frequency? Bail and return current capacity. */
+ 	if (freq_new == policy->cur)
+diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
+index d395bc9..f74e9d2 100644
+--- a/kernel/sched/fair.c
++++ b/kernel/sched/fair.c
+@@ -4625,7 +4625,7 @@ static unsigned long capacity_of(int cpu)
+ 	return cpu_rq(cpu)->cpu_capacity;
+ }
+ 
+-static unsigned long capacity_orig_of(int cpu)
++unsigned long capacity_orig_of(int cpu)
+ {
+ 	return cpu_rq(cpu)->cpu_capacity_orig;
+ }
+diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
+index b5e27d9..1327dc7 100644
+--- a/kernel/sched/sched.h
++++ b/kernel/sched/sched.h
+@@ -1476,6 +1476,8 @@ unsigned long arch_scale_cpu_capacity(struct sched_domain *sd, int cpu)
+ }
+ #endif
+ 
++unsigned long capacity_orig_of(int cpu);
++
+ extern struct static_key __sched_energy_freq;
+ static inline bool sched_energy_freq(void)
+ {

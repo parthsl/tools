@@ -1,0 +1,74 @@
+From patchwork Tue Jul  7 18:23:57 2015
+Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Subject: [RFCv5,14/46] sched: Make energy awareness a sched feature
+From: morten.rasmussen@arm.com
+X-Patchwork-Id: 6738591
+Message-Id: <1436293469-25707-15-git-send-email-morten.rasmussen@arm.com>
+To: peterz@infradead.org, mingo@redhat.com
+Cc: vincent.guittot@linaro.org, daniel.lezcano@linaro.org,
+ Dietmar Eggemann <Dietmar.Eggemann@arm.com>,
+ yuyang.du@intel.com, mturquette@baylibre.com, rjw@rjwysocki.net,
+ Juri Lelli <Juri.Lelli@arm.com>, sgurrappadi@nvidia.com,
+ pang.xunlei@zte.com.cn, linux-kernel@vger.kernel.org,
+ linux-pm@vger.kernel.org
+Date: Tue,  7 Jul 2015 19:23:57 +0100
+
+This patch introduces the ENERGY_AWARE sched feature, which is
+implemented using jump labels when SCHED_DEBUG is defined. It is
+statically set false when SCHED_DEBUG is not defined. Hence this doesn't
+allow energy awareness to be enabled without SCHED_DEBUG. This
+sched_feature knob will be replaced later with a more appropriate
+control knob when things have matured a bit.
+
+ENERGY_AWARE is based on per-entity load-tracking hence FAIR_GROUP_SCHED
+must be enable. This dependency isn't checked at compile time yet.
+
+cc: Ingo Molnar <mingo@redhat.com>
+cc: Peter Zijlstra <peterz@infradead.org>
+
+Signed-off-by: Morten Rasmussen <morten.rasmussen@arm.com>
+---
+ kernel/sched/fair.c     | 6 ++++++
+ kernel/sched/features.h | 6 ++++++
+ 2 files changed, 12 insertions(+)
+
+diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
+index d0df937..a95dad9 100644
+--- a/kernel/sched/fair.c
++++ b/kernel/sched/fair.c
+@@ -4781,6 +4781,7 @@ static long effective_load(struct task_group *tg, int cpu, long wl, long wg)
+ 
+ 	return wl;
+ }
++
+ #else
+ 
+ static long effective_load(struct task_group *tg, int cpu, long wl, long wg)
+@@ -4790,6 +4791,11 @@ static long effective_load(struct task_group *tg, int cpu, long wl, long wg)
+ 
+ #endif
+ 
++static inline bool energy_aware(void)
++{
++	return sched_feat(ENERGY_AWARE);
++}
++
+ static int wake_wide(struct task_struct *p)
+ {
+ 	int factor = this_cpu_read(sd_llc_size);
+diff --git a/kernel/sched/features.h b/kernel/sched/features.h
+index 03d8072..92bc36e 100644
+--- a/kernel/sched/features.h
++++ b/kernel/sched/features.h
+@@ -91,3 +91,9 @@ SCHED_FEAT(NUMA_FAVOUR_HIGHER, true)
+  */
+ SCHED_FEAT(NUMA_RESIST_LOWER, false)
+ #endif
++
++/*
++ * Energy aware scheduling. Use platform energy model to guide scheduling
++ * decisions optimizing for energy efficiency.
++ */
++SCHED_FEAT(ENERGY_AWARE, false)

@@ -1,0 +1,69 @@
+From patchwork Tue Jul  7 18:23:53 2015
+Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Subject: [RFCv5,10/46] sched: Include blocked utilization in usage tracking
+From: morten.rasmussen@arm.com
+X-Patchwork-Id: 6736671
+Message-Id: <1436293469-25707-11-git-send-email-morten.rasmussen@arm.com>
+To: peterz@infradead.org, mingo@redhat.com
+Cc: vincent.guittot@linaro.org, daniel.lezcano@linaro.org,
+ Dietmar Eggemann <Dietmar.Eggemann@arm.com>,
+ yuyang.du@intel.com, mturquette@baylibre.com, rjw@rjwysocki.net,
+ Juri Lelli <Juri.Lelli@arm.com>, sgurrappadi@nvidia.com,
+ pang.xunlei@zte.com.cn, linux-kernel@vger.kernel.org,
+ linux-pm@vger.kernel.org
+Date: Tue,  7 Jul 2015 19:23:53 +0100
+
+Add the blocked utilization contribution to group sched_entity
+utilization (se->avg.utilization_avg_contrib) and to get_cpu_usage().
+With this change cpu usage now includes recent usage by currently
+non-runnable tasks, hence it provides a more stable view of the cpu
+usage. It does, however, also mean that the meaning of usage is changed:
+A cpu may be momentarily idle while usage is >0. It can no longer be
+assumed that cpu usage >0 implies runnable tasks on the rq.
+cfs_rq->utilization_load_avg or nr_running should be used instead to get
+the current rq status.
+
+cc: Ingo Molnar <mingo@redhat.com>
+cc: Peter Zijlstra <peterz@infradead.org>
+
+Signed-off-by: Morten Rasmussen <morten.rasmussen@arm.com>
+---
+ kernel/sched/fair.c | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
+index c26980f..775b0c7 100644
+--- a/kernel/sched/fair.c
++++ b/kernel/sched/fair.c
+@@ -2804,7 +2804,8 @@ static long __update_entity_utilization_avg_contrib(struct sched_entity *se)
+ 		__update_task_entity_utilization(se);
+ 	else
+ 		se->avg.utilization_avg_contrib =
+-					group_cfs_rq(se)->utilization_load_avg;
++				group_cfs_rq(se)->utilization_load_avg +
++				group_cfs_rq(se)->utilization_blocked_avg;
+ 
+ 	return se->avg.utilization_avg_contrib - old_contrib;
+ }
+@@ -5061,13 +5062,17 @@ static int select_idle_sibling(struct task_struct *p, int target)
+ 
+ static int get_cpu_usage(int cpu)
+ {
++	int sum;
+ 	unsigned long usage = cpu_rq(cpu)->cfs.utilization_load_avg;
++	unsigned long blocked = cpu_rq(cpu)->cfs.utilization_blocked_avg;
+ 	unsigned long capacity_orig = capacity_orig_of(cpu);
+ 
+-	if (usage >= capacity_orig)
++	sum = usage + blocked;
++
++	if (sum >= capacity_orig)
+ 		return capacity_orig;
+ 
+-	return usage;
++	return sum;
+ }
+ 
+ /*
