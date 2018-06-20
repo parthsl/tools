@@ -1,0 +1,50 @@
+README for rt-app @VERSION@
+
+==============
+ INTRODUCTION
+==============
+
+rt-app is a test application that starts multiple periodic threads in order to 
+simulate a real-time periodic load.
+
+Code is currently maintained on GitHub:
+
+	https://github.com/gbagnoli/rt-app
+
+
+==============
+ REQUIREMENTS
+==============
+
+rt-app runs on GNU/Linux. It needs autoconf, automake, libtool , json-c and
+a recent compiler (mainly: gcc) for basic features.
+
+=============
+ COMPILATION
+=============
+
+$ autoreconf --install
+$ ./configure
+$ make
+$ make install
+
+Last step is optional, rt-app is generated in the src/ directory.
+
+Typical usage:
+
+$ ./configure --prefix=<directory>
+	installs the compiled program in  the given directory
+
+see ./configure --help for additional options.
+
+For cross-compilation, you may have to set the CC environment variable to your
+cross-compiler, and provide the --host option (e.g., --host=arm).
+
+=======
+ USAGE
+=======
+
+$ rt-app <config_file>
+where config file is a full/relative path to a json file (look under doc/ for
+examples config file) or "-" (without quotes) to read JSON data from stdin.
+

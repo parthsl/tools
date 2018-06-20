@@ -8,3 +8,5 @@ Various important tools and scripts
 - EAS_patches : Morten Rasmussen patches for EAS on arm board. [LKML Patches](https://patchwork.kernel.org/project/LKML/list/?submitter=48271&order=-date&page=1i).
 
 - Pandaboard_omap4 : Developement related to Pandaboard with OMAP-4 versions. To build kernel refer [here](https://github.com/RobertCNelson/armv7-multiplatform).
+
+- rt-app : Workload based in daily activites on mobiles and practical applications. Used in EAS development.

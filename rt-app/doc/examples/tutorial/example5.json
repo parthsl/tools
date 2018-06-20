@@ -1,0 +1,45 @@
+{
+	/* This example doesn't care of unique id constraint imposed for json
+	 * file and multiplies the used of the same key id at same object's level.
+	 * Removing this constraint makes the json file more readable and easier
+	 * to create. This file can't be used directly with rt-app but can be used
+	 * with workgen which parses and modifies it to match with json requirement
+	 */
+	"tasks": {
+		"thread0": {
+			"instance" : 1,
+			"priority": -19,
+			"cpus": [ 0 ],
+			"loop" : 1,
+			"phases" : {
+				"p0" : {
+					"sleep" : 10000,
+				},
+				"p1" : {
+					"loop" : 8,
+					"lock": "mutex",
+					"run" : 10000,
+					"signal": "queue",
+					"run" : 10000,
+					"unlock": "mutex",
+					"run": 100000,
+					"resume" : "thread1",
+					"timer": { "ref" : "tick", "period" : 200000}
+				}
+			}
+		},
+		"thread1": {
+			"priority": -19,
+			"cpus": [ 1 ],
+			"loop" : 3,
+			"lock": "mutex",
+			"wait": { "ref": "queue", "mutex": "mutex" },
+			"unlock": "mutex",
+			"run": 10000,
+			"suspend" : "thread1",
+			"run": 10000,
+			"suspend" : "thread1",
+			"run": 10000
+		}
+	}
+}
