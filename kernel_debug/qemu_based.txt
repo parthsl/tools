@@ -1,0 +1,33 @@
+In linux kernel source:
+---
+make x86_64_defconfig
+
+Set below config parameters:
+CONFIG_DEBUG_INFO=y
+CONFIG_DEBUG_KERNEL=y
+CONFIG_GDB_SCRIPTS=y
+
+build kernel
+
+Build Rootfs :
+https://unix.stackexchange.com/questions/122717/how-to-create-a-custom-linux-distro-that-runs-just-one-program-and-nothing-else/238579#238579
+
+
+Boot qemu:
+--- ---
+```
+qemu-system-x86_64 -kernel arch/x86/boot/bzImage -initrd rootfs.cpio.gz -S -s -append nokasl
+```
+
+Use GDB:
+gdb \
+        -ex "add-auto-load-safe-path $(pwd)" \
+        -ex "file vmlinux" \
+        -ex 'set arch i386:x86-64:intel' \
+        -ex 'target remote localhost:1234' \
+        -ex 'break start_kernel' \
+        -ex 'continue' \
+        -ex 'disconnect' \
+        -ex 'set arch i386:x86-64' \
+        -ex 'target remote localhost:1234'
+
