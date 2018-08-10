@@ -15,5 +15,6 @@ Various important tools and scripts
 -
 - kernel_debug : Qemu commands and initramfs to debug kernel along with working procedure(Fedora 28).
 
-- Bash tools: [liquid prompt] (https://github.com/nojhan/liquidprompt).
-              [Fuzzy finder ] (https://github.com/junegunn/fzf).
+- Bash tools:	[liquid prompt] (https://github.com/nojhan/liquidprompt).
+		[Fuzzy finder ] (https://github.com/junegunn/fzf).
+		[ToDo taskbook] (npm install --global taskbook).
