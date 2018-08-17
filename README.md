@@ -12,8 +12,10 @@ Various important tools and scripts
 - rt-app : Workload based in daily activites on mobiles and practical applications. Used in EAS development.
 
 - TSP_project : Tools and commands used to optimize TSP based algo on Intel Xeon Phi and IBM Power arch.
--
+
 - kernel_debug : Qemu commands and initramfs to debug kernel along with working procedure(Fedora 28).
+
+- testing_kernel : Test and trace linux kernel using qemu. Supports busybox based initramfs to debug from within the kernel.
 
 - Bash tools:	[liquid prompt] (https://github.com/nojhan/liquidprompt).
 		[Fuzzy finder ] (https://github.com/junegunn/fzf).
