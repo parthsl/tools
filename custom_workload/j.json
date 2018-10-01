@@ -1,0 +1,29 @@
+{
+	"tasks" : {
+		"t0" : {
+			"instance" : 3,
+			"timer" : { "ref" : "unique", "period" : 100000 },
+			"phases" : {
+				"light" : {
+					"run" : 200,
+					"loop" : 20000,
+					"timer" : { "ref" : "unique", "period" : 1000}
+				},
+				"burstyload" : {
+					"run" : 100,
+					"sleep" : 100,
+					"loop" : 100000
+				}
+			}
+		}
+	},
+	"global" : {
+		"duration" : 60,
+		"calibration" : "CPU0",
+		"default_policy" : "SCHED_OTHER",
+		"pi_enabled" : false,
+		"logdir" : "./",
+		"log_basename" : "rt-app2",
+		"gnuplot" : true
+	}
+}
