@@ -1,0 +1,104 @@
+From c7e1c865628421300e90d27a9e9aadc7d5930333 Mon Sep 17 00:00:00 2001
+From: Parth <pshah015@in.ibm.com>
+Date: Mon, 1 Oct 2018 12:13:49 +0530
+Subject: [PATCH 3/3] Added ops_file to calculate and output total wasted
+ cycles
+
+---
+ src/rt-app.c | 31 ++++++++++++++++++++++++-------
+ 1 file changed, 24 insertions(+), 7 deletions(-)
+
+diff --git a/src/rt-app.c b/src/rt-app.c
+index 84e7d1b..fd8da8c 100644
+--- a/src/rt-app.c
++++ b/src/rt-app.c
+@@ -181,7 +181,7 @@ int calibrate_cpu_cycles(int clock)
+ 
+ }
+ 
+-static inline unsigned long loadwait(unsigned long exec, int *ops)
++static inline unsigned long loadwait(unsigned long exec, unsigned long int *ops)
+ {
+ 	unsigned long load_count, secs, perf;
+ 	int i;
+@@ -254,7 +254,7 @@ static void memload(unsigned long count, struct _rtapp_iomem_buf *iomem)
+ 
+ static int run_event(event_data_t *event, int dry_run,
+ 		unsigned long *perf, rtapp_resource_t *resources,
+-		struct timespec *t_first, log_data_t *ldata, int *ops)
++		struct timespec *t_first, log_data_t *ldata, unsigned long int *ops)
+ {
+ 	rtapp_resource_t *rdata = &(resources[event->res]);
+ 	rtapp_resource_t *ddata = &(resources[event->dep]);
+@@ -426,7 +426,7 @@ int run(int ind,
+ 	phase_data_t *pdata,
+ 	rtapp_resource_t *resources,
+ 	struct timespec *t_first,
+-	log_data_t *ldata, int *ops)
++	log_data_t *ldata, unsigned long int *ops)
+ {
+ 	event_data_t *events = pdata->events;
+ 	int nbevents = pdata->nbevents;
+@@ -716,6 +716,10 @@ static void set_thread_priority(thread_data_t *data, sched_data_t *sched_data)
+ 	data->curr_sched_data = sched_data;
+ }
+ 
++static unsigned long int total_ops = 0;
++const char* ops_file = "ops_file";
++pthread_mutex_t lock;
++
+ void *thread_body(void *arg)
+ {
+ 	thread_data_t *data = (thread_data_t*) arg;
+@@ -731,7 +735,8 @@ void *thread_body(void *arg)
+ 	unsigned int timings_size, timing_loop;
+ 	struct sched_attr attr;
+ 	int ret, phase, phase_loop, thread_loop, log_idx;
+-	int ops = 0;
++	unsigned long int ops = 0;
++	FILE* opsf;
+ 
+ 	/* Set thread name */
+ 	ret = pthread_setname_np(pthread_self(), data->name);
+@@ -916,8 +921,14 @@ void *thread_body(void *arg)
+ 		for (j = 0; j < log_idx; j++)
+ 			log_timing(data->log_handler, &timings[j]);
+ 	}
+-	fprintf(data->log_handler,"Total wasted cycles =%d\n",ops);
+-
++	
++	pthread_mutex_lock(&lock);
++	opsf = fopen(ops_file,"w");
++	total_ops += ops;
++	fprintf(opsf,"%lu\n",total_ops);
++	fclose(opsf);
++	fprintf(data->log_handler,"Total wasted cycles = %lu\n",ops);
++	pthread_mutex_unlock(&lock);
+ 
+ 	if (opts.ftrace)
+ 		log_ftrace(ft_data.marker_fd, "[%d] exiting", data->ind);
+@@ -942,6 +953,12 @@ int main(int argc, char* argv[])
+ 
+ 	parse_command_line(argc, argv, &opts);
+ 
++	if (pthread_mutex_init(&lock, NULL) != 0) 
++	{ 
++		printf("\n mutex init has failed\n"); 
++		return 1; 
++	} 
++
+ 	/* allocated threads */
+ 	nthreads = opts.nthreads;
+ 	threads = malloc(nthreads * sizeof(pthread_t));
+@@ -1157,7 +1174,7 @@ int main(int argc, char* argv[])
+ 			log_ftrace(ft_data.marker_fd, "main shutdown\n");
+ 		shutdown(SIGTERM);
+ 	}
+-
++	
+ 	for (i = 0; i < nthreads; i++) {
+ 		pthread_join(threads[i], NULL);
+ 	}
+-- 
+2.17.1
+
