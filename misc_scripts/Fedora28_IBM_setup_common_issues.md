@@ -4,6 +4,8 @@ Use `chage --maxdays 90 <username>` to set password change policy every 90 days.
 -- For error `import gtk,gtk.glade module not found`: dnf install pygtk2-libglade
 -- [New Joinee to LTC setup guidelines](https://ltc3.linux.ibm.com/wiki/IndiaTeam/Newjoinees#head-c41868fe74b033cc5bbd13336332694c387cb4d6)
 
+-  [Notes dominos server:](https://w3.ibm.com/help/#/article/find_mail_server)
+
 #### SAS VPN Process:
 ###### _How to configure SAS VPN on Fedora 28:_
 1. Install `ibm-config-NetworkManager-openconnect`
