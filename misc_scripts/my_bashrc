@@ -1,0 +1,21 @@
+alias c="clear"
+alias l="ls -ath"
+alias gc="git checkout"
+alias gb="git branch"
+alias gst="git status"
+alias cdl="cd ~/Documents/linux/"
+alias du="ncdu --color dark -rr -x --exclude .git --exclude node_modules"
+
+bso() {
+	cat ~/bso_clear.sh.ecp | openssl aes-256-cbc -d | sed "s/fir02/$1/g" | /usr/bin/expect -
+}
+
+sshp8() {
+	sshpass -p abc123 ssh root@$1
+}
+
+gn() {
+	curl getnews.tech/$1
+}
+
+alias gl="git log --oneline"
