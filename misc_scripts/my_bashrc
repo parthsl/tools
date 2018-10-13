@@ -19,3 +19,5 @@ gn() {
 }
 
 alias gl="git log --oneline"
+
+source ~/path
