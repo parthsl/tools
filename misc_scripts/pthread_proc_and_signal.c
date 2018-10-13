@@ -1,3 +1,12 @@
+/* @coppermonkey
+ * The program will spawn ncpus threads in a 
+ * system where 50% of the pthreads will read
+ * /proc/pid/stat where pid is of the parent
+ * calling process. While the rest threads will
+ * send SIGUSR1 signals to proc stat reading 
+ * pthreads.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -7,6 +16,10 @@
 #include <fcntl.h>
 #include <time.h>
 
+
+/*
+ * Topology defining data structs
+ */
 int ncpus = 1;
 
 long int pid;
@@ -15,6 +28,12 @@ void sig_handle(int sig){
 	asm volatile("nop");
 }
 
+/*
+ * Worker thread spawned for each CPU
+ * Worker takes care of the core they belong to 
+ * and request the frequency for the same core
+ * @fd_id: the index of respective fd
+ */
 void* worker(void *args) {
 	int proc_fd;
 	char parent_pid_file[1024];
@@ -56,6 +75,10 @@ int get_nr_cpu(){
 	return ncpus;
 }
 
+
+/*
+ * argv[1] should contain total threads need to be spawned
+ */
 int main(int argc, char** argv)
 {
 	unsigned long nr_threads = 1;
@@ -79,6 +102,13 @@ int main(int argc, char** argv)
 			pthread_create(&tid[i],NULL, worker, NULL);
 	}
 	
+/*
+	while(1)
+	for(i=0;i<nr_threads; i++)
+		pthread_kill(tid[i], SIGUSR1);
+
+*/	while(1);
+
 	for(i=0;i<nr_threads; i++)
 	pthread_join(tid[i],NULL);
 
