@@ -21,6 +21,8 @@ int main(int argc, char**argv)
 	if(argc > 1){
 		sscanf(argv[1], "%d", &compile_opt);
 	}
+	
+	if(!compile_opt)printf("set argv[1]=1 for compiler optimization loop\nUse perf stat ./a.out to see difference in IPC\n");
 
 	if(compile_opt)
 		while(1);
@@ -29,3 +31,12 @@ int main(int argc, char**argv)
 
 	return 0;
 }
+
+
+/*
+ * GCC optimizes the while(1) loop to perform less instructions
+ * One can see the difference in Instructions per Cycles.
+ * The loop with while(1); will dispatch less instrcutions
+ * and the asm volatile dispatches more instrcutions.
+ * While keeping the cycles consumed by both is the same.
+ */
