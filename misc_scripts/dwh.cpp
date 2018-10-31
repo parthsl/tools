@@ -1,3 +1,67 @@
+/*
+    dwh is a test program to run a task with large (or small) numbers of
+    pthreads, including worker and dedicated I/O threads. It's purpose
+    is to generate heavy workloads for a single task. Combining memory
+    alloc/read/write/free, CPU arithmetic and lock controlled random file
+    I/O. Multiple instances can be run at the same time on the same host.
+    I/O is with shared lock reads and exclusive lock writes.
+
+    Compile example on linux:
+
+        g++ -O3 -D_FILE_OFFSET_BITS=64 -pthread -o dwh dwh.cpp
+
+    Then the output file dwh can be run with --help for information.
+    
+    Example usage:
+    
+        ./dwh --minthreads 500 --maxthreads 575 --iothreads 50 --maxmem 1G
+            --maxiosize 1M --shortthreads --time 200 dwh.test
+    
+    Will run dwh with the following configuration:
+    
+    Setup at least 500 threads (--minthreads)
+    Limit total threads to no more than 575 at any time (--maxthreads)
+        If no value is specified for --maxthreads the default is the
+        --minthreads value
+    Use 50 threads for dedicated I/O operations (--iothreads)
+        These are included in the instantaneous thread count limit of
+        --maxthreads
+    Don't use more than 1GiB of memory for processing (--maxmem)
+    Perform test I/O using blocks no larger than 1MiB (--maxiosize)
+        Consider that the sum of memory used by all threads is the
+        limit imposed by --maxmem. Threads only use one block at a time
+        so it has to be possible for the number of threads multiplied by
+        the --maxiosize value to be less than or equal to the --maxmem
+        value at all times.
+    Allow worker threads to end and new ones to be created (--shortthreads)
+        At any instant the absolute thread count may be less than minthreads
+        Without this or by using --longthreads all started threads run until
+        program exit (or until they fail on their own)
+    Run the test case for 200 seconds (--time)
+        Initialization time is not included and may take several seconds
+        There is no live output when the test is running and succeeding
+    The last argument shown is the file to use for performing the I/O
+        Don't run multiple instances with the same test file, each instance
+        creates an empty file and pre-populates it and the locking is per-
+        task only.
+
+    Also:
+
+    Note that sending a SIGUSR1 to a running instance will cause it to end
+    on demand and clean-up as-in a normal exit, e.g.:
+
+    ps -A | grep dwh
+    14727 ?        00:00:00 dwh
+    kill -USR1 1427
+
+    Sending a SIGKILL will cause it to be terminated without cleanup. That
+    should only leave the test file undeleted with no other waste.
+
+    It should also respond to Ctrl-C to exit if it is not completing the
+    process.
+
+*/
+
 #include <stdbool.h>
 #include <ctype.h>
 #include <string.h>
@@ -19,10 +83,13 @@
 
 bool Diagnose = false;
 
+/* Global "switch" to make all threads end themselves */
 bool EndAllThreads = false;
 
+/* Global "switch" to stop I/O being queued (but letting pending cases finish) */
 bool EndAllIO = false;
 
+/* Global number of active pthreads */
 std::atomic<int> nThreads(0);
 std::atomic<int> nIOThreads(0);
 std::atomic<int> nIOTasks(0);
@@ -32,15 +99,20 @@ std::atomic<int> nPeakThreads(0);
 std::atomic<int> nTotalThreads(0);
 std::atomic<int> threadNum(0);
 
+/* Global thread info */
 struct thread_info *iotinfo = NULL;
 struct thread_info *wktinfo = NULL;
 
+/* Global access control for wktinfo */
 pthread_mutex_t wktilock;
 
+/* Global thread limits */
 unsigned int maxthreads = 0;
 unsigned int minthreads = 0;
 unsigned int iothreads = 0;
 
+/* Global work done info */
+std::atomic<unsigned long long> memUsed(0);
 std::atomic<unsigned long long> totalRead(0);
 std::atomic<unsigned long long> totalWrite(0);
 std::atomic<unsigned long long> totalTriedIORead(0);
@@ -50,19 +122,30 @@ std::atomic<unsigned long long> totalIOWrite(0);
 std::atomic<unsigned long long> pendingIOReads(0);
 std::atomic<unsigned long long> pendingIOWrites(0);
 std::atomic<unsigned long long> pendingIODone(0);
+
+/* Global runtime limit (seconds) */
 unsigned int maxruntime = 20;
+
+/* Global memory limits */
 unsigned long long maxMem = 0;
 unsigned long long maxIOSize = 1 * 1024 * 1024;
+
+/* Global signal mask */
 static  sigset_t sigmask;
 std::atomic<int> sigStop(0);
 std::atomic<int> nSigMaskSets(0);
+
+/* Did we show help */
 bool helpShown = false;
 
+/* Flag set by ‘--verbose’ (assume not verbose) */
 static int verbose_flag = 0;
 
+/* Flag set by '--shortthreads' (assume threads end and new ones replace them) */
 static int short_threads = 1;
 #define RESTART_SCOPE (RAND_MAX / 800)
 
+/* I/O filename/stream */
 unsigned long long fileSize = 0;
 std::string ioFilename;
 FILE *ioReadStream = NULL;
