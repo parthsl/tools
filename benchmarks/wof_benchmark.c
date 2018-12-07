@@ -14,6 +14,8 @@
 static int nr_threads;
 static int ratio;
 static int array_size;
+static char* outfile;
+pthread_mutex_t outfile_lock;
 
 /*
  * gcc wof_load.c -lm -fopenmp -lpthread
@@ -134,7 +136,7 @@ void* high_util(void* data)
 
 	gettimeofday(&first_wakeup, NULL);
 
-	printf("high util PID=%lu createed tiemdiff=%llu from cpu=%d to=%d\n",
+	printf("high util PID=%lu created tiemdiff=%llu from cpu=%d to=%d\n",
 			syscall(SYS_gettid),tvdelta(&dp->timestamp,
 				&first_wakeup),dp->cpu_in_use, sched_getcpu());
 
@@ -149,7 +151,6 @@ void* high_util(void* data)
 		for(int i=0;i<array_size;i++)sum += a[i];
 	}
 	gettimeofday(&t2, NULL);
-//	printf("hihg util ops = %d, timespent=%llu\n",i=array_size/1000*array_size, tvdelta(&t1, &t2));
 }
 
 void check_cpu_changed(struct timeval *first_wakeup, ll* visited_cpu_tail)
@@ -174,6 +175,7 @@ void* low_util(void *data)
 	struct data_passer* dp = (struct data_passer*)data;
 	struct timeval first_wakeup;
 	int current_cpu = sched_getcpu();
+	FILE* fd;
 	ll* visited_cpus;
 	ll* visited_cpus_head;
 
@@ -182,6 +184,7 @@ void* low_util(void *data)
 	visited_cpus_head = visited_cpus;
 	visited_cpus->data.cpu_in_use = current_cpu;
 	visited_cpus->data.delta = tvdelta(&dp->timestamp, &first_wakeup);
+	tv_copy(&visited_cpus->data.timestamp, &first_wakeup);
 
 
 	printf("low util PID=%lu creation time=%llu from cpu=%d to=%d\n",
@@ -208,12 +211,16 @@ void* low_util(void *data)
 	high_util(data);
 	
 	visited_cpus = visited_cpus_head;
-	printf("-------Visited cpus and timedelta between them------\n");
+	pthread_mutex_lock(&outfile_lock);
+	fd = fopen(outfile, "a");
+	fprintf(fd, "-------Visited cpus and timedelta between them------\n");
 	while(visited_cpus){
-		printf("PID=%lu cpus=%d timediff=%llu\n",syscall(SYS_gettid), visited_cpus->data.cpu_in_use,
-				visited_cpus->data.delta);
+		fprintf(fd, "PID=%lu cpus=%d timediff=%llu timestamp=%ld\n",syscall(SYS_gettid), visited_cpus->data.cpu_in_use,
+				visited_cpus->data.delta, visited_cpus->data.timestamp.tv_sec*1000000+visited_cpus->data.timestamp.tv_usec);
 		visited_cpus = visited_cpus->next;
 	}
+	fclose(fd);
+	pthread_mutex_unlock(&outfile_lock);
 }
 
 
@@ -221,11 +228,12 @@ void* low_util(void *data)
 enum {
 	HELP_LONG_OPT = 1,
 };
-char *option_string = "t:r:n";
+char *option_string = "t:r:n:o:";
 static struct option long_options[] = {
 	{"threads", required_argument, 0, 't'},
 	{"ratio", required_argument, 0, 'r'},
 	{"array-size", required_argument, 0, 'n'},
+	{"output", required_argument, 0, 'o'},
 	{"help", no_argument, 0, HELP_LONG_OPT},
 	{0, 0, 0, 0}
 };
@@ -264,6 +272,9 @@ static void parse_options(int ac, char **av)
 			case 'n':
 				array_size = atoi(optarg);
 				break;
+			case 'o' :
+				outfile = optarg;
+				break;
 			case '?':
 			case HELP_LONG_OPT:
 				print_usage();
@@ -285,6 +296,7 @@ int main(int argc, char**argv){
 	nr_threads = 1;
 	array_size = 10000;
 	ratio = 0;
+	outfile = "output_file.txt";
 
 	parse_options(argc, argv);
 
