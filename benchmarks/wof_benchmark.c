@@ -91,8 +91,8 @@ int stick_this_thread_to_core(int core_id) {
 }
 
 struct data_passer {
-	struct timeval creation_time;
-	int creation_cpu;
+	struct timeval timestamp;
+	int cpu_in_use;
 	unsigned long long delta;
 };
 
@@ -104,8 +104,8 @@ typedef struct linked_list {
 void insert_node(ll* tail, struct timeval *time1, unsigned long long delta, int cpu)
 {
 	ll* new_node = (ll*)malloc(sizeof(ll));
-	tv_copy(&new_node->data.creation_time, time1);
-	new_node->data.creation_cpu = cpu;
+	tv_copy(&new_node->data.timestamp, time1);
+	new_node->data.cpu_in_use = cpu;
 	new_node->data.delta = delta;
 	tail->next = new_node;
 	new_node->next = NULL;
@@ -135,8 +135,8 @@ void* high_util(void* data)
 	gettimeofday(&first_wakeup, NULL);
 
 	printf("high util PID=%lu createed tiemdiff=%llu from cpu=%d to=%d\n",
-			syscall(SYS_gettid),tvdelta(&dp->creation_time,
-				&first_wakeup),dp->creation_cpu, sched_getcpu());
+			syscall(SYS_gettid),tvdelta(&dp->timestamp,
+				&first_wakeup),dp->cpu_in_use, sched_getcpu());
 
 	for(int iter=0;iter<array_size;iter++)
 		a[iter] = rand();
@@ -152,20 +152,16 @@ void* high_util(void* data)
 //	printf("hihg util ops = %d, timespent=%llu\n",i=array_size/1000*array_size, tvdelta(&t1, &t2));
 }
 
-void check_cpu_changed(struct timeval *first_wakeup, ll* visited_cpus)
+void check_cpu_changed(struct timeval *first_wakeup, ll* visited_cpu_tail)
 {
-	int *cpu = (int*)malloc(sizeof(int));
-	int *current_cpu = &visited_cpus->data.creation_cpu;
-	*cpu = sched_getcpu();
+	int cpu = sched_getcpu(); 
+	int *current_cpu = &visited_cpu_tail->data.cpu_in_use;
 	
-	if(*cpu != *current_cpu){
+	if(cpu != *current_cpu){
 		struct timeval temp;
 		gettimeofday(&temp, NULL);
-		insert_node(visited_cpus, &temp, tvdelta(first_wakeup, &temp), *cpu);
-		visited_cpus = visited_cpus->next;
-		printf("PID=%lu %x %d in tdelta=%llu\n", syscall(SYS_gettid),visited_cpus,
-			       visited_cpus->data.creation_cpu, tvdelta(first_wakeup, &temp));
-		*current_cpu = *cpu;
+		insert_node(visited_cpu_tail, &temp, tvdelta(first_wakeup, &temp), cpu);
+		*current_cpu = cpu;
 		tv_copy(first_wakeup, &temp);
 	}
 }
@@ -181,15 +177,16 @@ void* low_util(void *data)
 	ll* visited_cpus;
 	ll* visited_cpus_head;
 
+	gettimeofday(&first_wakeup, NULL);
 	visited_cpus = (ll*)malloc(sizeof(ll));
 	visited_cpus_head = visited_cpus;
-	visited_cpus->data.creation_cpu = current_cpu;
+	visited_cpus->data.cpu_in_use = current_cpu;
+	visited_cpus->data.delta = tvdelta(&dp->timestamp, &first_wakeup);
 
-	gettimeofday(&first_wakeup, NULL);
 
-	printf("low util PID=%lu createed tiemdiff=%llu from cpu=%d to=%d\n",
-			syscall(SYS_gettid),tvdelta(&dp->creation_time,
-			&first_wakeup),dp->creation_cpu,current_cpu);
+	printf("low util PID=%lu creation time=%llu from cpu=%d to=%d\n",
+			syscall(SYS_gettid),tvdelta(&dp->timestamp,
+			&first_wakeup),dp->cpu_in_use,current_cpu);
 	
 	for(int iter=0;iter<array_size;iter++)
 		a[iter] = rand();
@@ -200,17 +197,20 @@ void* low_util(void *data)
 		{
 			for(int i=0;i<1000;i++)sum += a[i];
 			check_cpu_changed(&first_wakeup, visited_cpus);
+			if(visited_cpus->next)
+			visited_cpus = visited_cpus->next;
 			usleep(1);
 		}
 	}
 
-	gettimeofday(&dp->creation_time, NULL);
-	dp->creation_cpu = sched_getcpu();
+	gettimeofday(&dp->timestamp, NULL);
+	dp->cpu_in_use = sched_getcpu();
 	high_util(data);
 	
 	visited_cpus = visited_cpus_head;
+	printf("-------Visited cpus and timedelta between them------\n");
 	while(visited_cpus){
-		printf("PID=%lu cpus=%d timediff=%llu\n",syscall(SYS_gettid), visited_cpus->data.creation_cpu,
+		printf("PID=%lu cpus=%d timediff=%llu\n",syscall(SYS_gettid), visited_cpus->data.cpu_in_use,
 				visited_cpus->data.delta);
 		visited_cpus = visited_cpus->next;
 	}
@@ -294,13 +294,13 @@ int main(int argc, char**argv){
 	for(int i=0; i<nr_threads; i++)
 	{
 		if(i >= nr_threads*ratio/100){
-			gettimeofday(&dp.creation_time, NULL);
-			dp.creation_cpu = sched_getcpu();
+			gettimeofday(&dp.timestamp, NULL);
+			dp.cpu_in_use = sched_getcpu();
 			pthread_create(&tid[i], NULL, high_util, &dp);
 		}
 		else{
-			gettimeofday(&dp.creation_time, NULL);
-			dp.creation_cpu = sched_getcpu();
+			gettimeofday(&dp.timestamp, NULL);
+			dp.cpu_in_use = sched_getcpu();
 			pthread_create(&tid[i],NULL, low_util, &dp);
 		}
 	}
