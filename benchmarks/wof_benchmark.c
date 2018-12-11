@@ -49,9 +49,9 @@ void tvsub(struct timeval * tdiff, struct timeval * t1, struct timeval * t0)
 }
 
 /*
- *  * returns the difference between start and stop in usecs.  Negative values
- *   * are turned into 0
- *    */
+ * returns the difference between start and stop in usecs.  Negative values
+ * are turned into 0
+ */
 unsigned long long tvdelta(struct timeval *start, struct timeval *stop)
 {
 	struct timeval td;
@@ -62,21 +62,6 @@ unsigned long long tvdelta(struct timeval *start, struct timeval *stop)
 	usecs *= 1000000;
 	usecs += td.tv_usec;
 	return (usecs);
-}
-
-void freq_sensitive2(int *a)
-{
-	int sum = 0;
-	struct timeval t1, t2;
-
-	gettimeofday(&t1, NULL);
-
-	for(int i=0;i<array_size;i++)a[i] = sqrt(a[i]);
-	for(int i=0;i<array_size;i++)sum += a[i];
-
-	gettimeofday(&t2, NULL);
-
-	printf("sqrt sum = %d, timespent=%llu\n",sum, tvdelta(&t1, &t2));
 }
 
 int stick_this_thread_to_core(int core_id) {
@@ -151,6 +136,8 @@ void* high_util(void* data)
 		for(int i=0;i<array_size;i++)sum += a[i];
 	}
 	gettimeofday(&t2, NULL);
+
+	return NULL;
 }
 
 void check_cpu_changed(struct timeval *first_wakeup, ll* visited_cpu_tail)
@@ -212,15 +199,24 @@ void* low_util(void *data)
 	
 	visited_cpus = visited_cpus_head;
 	pthread_mutex_lock(&outfile_lock);
-	fd = fopen(outfile, "a");
+	
+	if(outfile[0]=='s')
+		fd = stdout;
+	else
+		fd = fopen(outfile, "a");
+	
+	
 	fprintf(fd, "-------Visited cpus and timedelta between them------\n");
 	while(visited_cpus){
 		fprintf(fd, "PID=%lu cpus=%d timediff=%llu timestamp=%ld\n",syscall(SYS_gettid), visited_cpus->data.cpu_in_use,
 				visited_cpus->data.delta, visited_cpus->data.timestamp.tv_sec*1000000+visited_cpus->data.timestamp.tv_usec);
 		visited_cpus = visited_cpus->next;
 	}
+	fflush(fd);
 	fclose(fd);
 	pthread_mutex_unlock(&outfile_lock);
+
+	return NULL;
 }
 
 
@@ -244,6 +240,7 @@ static void print_usage(void)
 			"\t-t (--nr-threads): number of threads (def: 1)\n"
 			"\t-r (--ratio): ratio of threads in low utilization categor(def: 0)\n"
 			"\t-n (--array-size): size of array (def: 10000)\n"
+			"\t-o (--output): writes cpus covered per thread into a file(def: stdout)\n"
 	       );
 	exit(1);
 }
@@ -251,7 +248,6 @@ static void print_usage(void)
 static void parse_options(int ac, char **av)
 {
 	int c;
-	int found_sleeptime = -1;
 
 	while (1) {
 		int option_index = 0;
@@ -296,7 +292,7 @@ int main(int argc, char**argv){
 	nr_threads = 1;
 	array_size = 10000;
 	ratio = 0;
-	outfile = "output_file.txt";
+	outfile = "stdout";
 
 	parse_options(argc, argv);
 

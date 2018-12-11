@@ -1,10 +1,10 @@
 CC=gcc
-CFLAGS=-fopenmp -lm -Wall
-OBJS=test.c
-BINS=a
+CFLAGS=-lpthread -lm -Wall
+OBJS=wof_benchmark.c
+BINS=wof_test
 
-a: ${OBJS}
-	${CC} ${OBJS} ${CFLAGS} -o $@ -O0
+${BINS}: ${OBJS}
+	${CC} ${OBJS} ${CFLAGS} -o $@ -O1 -g
 
 clean: 
 	-rm -f *.o ${BINS}
