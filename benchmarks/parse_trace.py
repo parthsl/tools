@@ -10,13 +10,13 @@ def parse_kernel_trace(pid, kernel_trace):
     with open(tracefile,"r") as f:
         line = f.readline()
         while line:
-            if('dest_cpu' in line):
+            if('t_cpu' in line):
                 trace_line = line.split(" ")
                 while '' in trace_line:
                     trace_line.remove('')
                 pid_entity = trace_line[6]
                 if(pid in pid_entity):
-                    cpu = int(trace_line[9].split('=')[1])
+                    cpu = int(trace_line[-1].split('=')[1])
                     time = trace_line[3].split(":")[0]
                     kernel_trace.append([cpu, time])
             line = f.readline()
