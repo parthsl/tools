@@ -1,6 +1,9 @@
-tracefile = "new_trace"
-outfile = "out1"
-workload_outfile = "f1"
+print("Enter kernel trace file name")
+tracefile = raw_input()
+print("Enter output filename")
+outfile = raw_input()
+print("Enter workload trace file name")
+workload_outfile = raw_input()
 
 
 def parse_kernel_trace(pid, kernel_trace):
@@ -15,7 +18,7 @@ def parse_kernel_trace(pid, kernel_trace):
                 if(pid in pid_entity):
                     cpu = int(trace_line[9].split('=')[1])
                     time = trace_line[3].split(":")[0]
-                    kernel_trace.append([time, cpu])
+                    kernel_trace.append([cpu, time])
             line = f.readline()
 
 
@@ -29,24 +32,41 @@ def parse_workload_trace(table):
         while line:
             trace_line = line.split(" ")
             if(':Visi' in line):
-                pid = trace_line[0].split(":")[0]
                 if(start_tracing):
                     table.append([pid, kernel_trace, workload_trace])
                 else:
                     start_tracing = 1
+                pid = trace_line[0].split(":")[0]
                 kernel_trace = []
                 parse_kernel_trace(pid, kernel_trace)
 
                 workload_trace = []
             else:
-                cpu = (trace_line[1].split("=")[1])
+                cpu = int(trace_line[1].split("=")[1])
                 time = trace_line[3].split("=")[1]
                 workload_trace.append([cpu, time])
             line = f.readline()
 
         table.append([pid, kernel_trace, workload_trace])
 
+def join_list(table):
+    ol = []
+    for pid in table:
+        joint_table = []
+        workload_trace_iter = 0
+        wt = pid[2]
+        for kt in pid[1]:
+            if (kt[0]==wt[workload_trace_iter][0]):
+                joint_table.append([kt[0], kt[1], wt[workload_trace_iter][1]])
+                workload_trace_iter += 1
+            else:
+                joint_table.append([kt[0], kt[1], ''])
+        ol.append([pid[0], joint_table])
+
+    return ol
+
+
 table = []
 #parse_trace(4906)
 parse_workload_trace(table)
-print(table)
+print(join_list(table))
