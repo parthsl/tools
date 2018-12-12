@@ -25,12 +25,19 @@ disable_trace () {
 	echo 0 > $trace/events/enable;
 	echo 0 > $events/filter;
 	echo 0 > $events/enable;
-	echo > $trace/trace;
 }
 
 if [ $arg1 -eq 1 ]
 then
 	enable_trace
 else
-	disable_trace
+       	if [ $arg1 -eq 0 ]
+	then
+		disable_trace
+	else
+		if [ $arg1 -eq 2 ]
+		then
+			cp $trace/trace ./new_trace;
+		fi
+	fi
 fi

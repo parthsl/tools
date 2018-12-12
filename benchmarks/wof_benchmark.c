@@ -13,7 +13,7 @@
 
 static int nr_threads;
 static int ratio;
-static int array_size;
+static long long int array_size;
 static char* outfile;
 pthread_mutex_t outfile_lock;
 
@@ -206,7 +206,7 @@ void* low_util(void *data)
 		fd = fopen(outfile, "a");
 	
 	
-	fprintf(fd, "-------Visited cpus and timedelta between them------\n");
+	fprintf(fd, "%lu:Visited cpus and timedelta between them----------------------\n",syscall(SYS_gettid));
 	while(visited_cpus){
 		fprintf(fd, "PID=%lu cpus=%d timediff=%llu timestamp=%ld\n",syscall(SYS_gettid), visited_cpus->data.cpu_in_use,
 				visited_cpus->data.delta, visited_cpus->data.timestamp.tv_sec*1000000+visited_cpus->data.timestamp.tv_usec);
@@ -266,7 +266,7 @@ static void parse_options(int ac, char **av)
 				ratio = atoi(optarg);
 				break;
 			case 'n':
-				array_size = atoi(optarg);
+				sscanf(optarg, "%lld", &array_size);
 				break;
 			case 'o' :
 				outfile = optarg;
@@ -295,10 +295,12 @@ int main(int argc, char**argv){
 	outfile = "stdout";
 
 	parse_options(argc, argv);
+	printf("Running with array_size=%lld ratio=%d\n",array_size, ratio);
 
 	srand(time(NULL));
 	tid = (pthread_t*)malloc(sizeof(pthread_t)*nr_threads);
 
+	system("/bin/bash ftrace_migration.sh 1 \"comm==\'wof_bench\'\"");
 	for(int i=0; i<nr_threads; i++)
 	{
 		if(i >= nr_threads*ratio/100){
@@ -315,6 +317,10 @@ int main(int argc, char**argv){
 
 	for(int i=0; i<nr_threads; i++)
 		pthread_join(tid[i], NULL);
+	//stop tracing
+	system("/bin/bash ftrace_migration.sh 0");
+	//move trace file here
+	system("/bin/bash ftrace_migration.sh 2");
 
 	return 0;
 }
