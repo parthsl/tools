@@ -15,6 +15,8 @@ enable_trace () {
 	echo "nop" > $trace/current_tracer;
 	echo 0 > $trace/events/enable;
 	echo 1 > $events/enable;
+	echo 1 > $trace/events/sched/sched_wakeup_new/enable;
+	echo "$arg2" > $trace/events/sched/sched_wakeup_new/filter;
 	echo "$arg2" > $events/filter;
 	echo > $trace/trace;
 	echo 1 > $tracing_on;
@@ -24,6 +26,8 @@ disable_trace () {
 	echo 0 > $tracing_on;
 	echo 0 > $trace/events/enable;
 	echo 0 > $events/filter;
+	echo 0 > $trace/events/sched/sched_wakeup_new/enable;
+	echo 0 > $trace/events/sched/sched_wakeup_new/filter;
 	echo 0 > $events/enable;
 }
 
