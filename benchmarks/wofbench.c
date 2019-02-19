@@ -20,8 +20,12 @@ static long long unsigned int output;
 static int bind = 0;
 pthread_mutex_t output_lock;
 
+const int ltb_len = 20;
+const int htb_len = 12;
 static int low_task_binds[] = {12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31};
-static int high_task_binds[] = {0,1,2,3,4,5,6,7,8,9,10,11};
+static int high_task_binds[] = {0,4,8,1,2,3,5,6,7,9,10,11};
+//static int low_task_binds[] = {16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47};
+//static int high_task_binds[] = {0,4,8,12};
 /*
  * gcc wof_load.c -lm -fopenmp -lpthread
  * Taskset high util thread to faster cpu and monitor impact on light util thread when setting it to faster or slower cpu will not impact workload much
@@ -100,7 +104,7 @@ void* high_util(void* data)
 		a[iter] = rand();
 
 	if(bind)
-		stick_this_thread_to_cpus(high_task_binds, 12);
+		stick_this_thread_to_cpus(high_task_binds, htb_len);
 
 	gettimeofday(&t2, NULL);
 	while(1)
@@ -121,11 +125,11 @@ void* low_util(void *data)
 	long long unsigned int ops = 0;
 	struct timeval t1,t2;
 	long long unsigned int period = 100000;
-	long long unsigned int run_period = 20000;
+	long long unsigned int run_period = 10000;
 	long long unsigned int wall_clock;
 
 	if(bind)
-		stick_this_thread_to_cpus(low_task_binds, 20);
+		stick_this_thread_to_cpus(low_task_binds, ltb_len);
 
 	while(1){
 		gettimeofday(&t1,NULL);
@@ -133,12 +137,12 @@ void* low_util(void *data)
 		{
 			gettimeofday(&t2,NULL);
 			wall_clock = tvdelta(&t1,&t2);	
+			if(wall_clock >= period)break;
 			if(wall_clock >= run_period){
-				if(wall_clock >= period)break;
 				usleep(10);
 			}
 			else{
-				sum += 100;
+				sum += sqrt(rand());
 				ops++;
 			}
 		}
@@ -244,6 +248,7 @@ int main(int argc, char**argv){
 		else{
 			pthread_create(&tid[i],NULL, low_util, NULL);
 		}
+		usleep(1000);
 	}
 
 	while(1){
