@@ -16,14 +16,20 @@ static int nr_threads;
 static int highutil_count;
 static long long unsigned int array_size;
 static long long unsigned timeout;
-static long long unsigned int output;
+static long long unsigned int output = 0;
 static int bind = 0;
 pthread_mutex_t output_lock;
 
-const int ltb_len = 20;
-const int htb_len = 12;
-static int low_task_binds[] = {12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31};
-static int high_task_binds[] = {0,4,8,1,2,3,5,6,7,9,10,11};
+#ifdef Sseperate
+int ltb_len = 4;
+static int low_task_binds[] = {60,61,62,63};
+#else
+int ltb_len =16;
+static int low_task_binds[] = {1,5,9,13,17,21,25,29,33,37,41,45,49,53,57,61};
+#endif
+
+int htb_len = 16;
+static int high_task_binds[] = {0,4,8,12,16,20,24,28,32,36,40,44,48,52,56,60};
 //static int low_task_binds[] = {16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47};
 //static int high_task_binds[] = {0,4,8,12};
 /*
@@ -95,13 +101,13 @@ void handle_sigint(int sig)
 
 void* high_util(void* data)
 {
-	int a[array_size];
+	double a[array_size];
 	int i = array_size/1000;
-	long long unsigned int sum = 0;
+	double sum = 0;
 	struct timeval t1,t2;
 
 	for(int iter=0;iter<array_size;iter++)
-		a[iter] = rand();
+		a[iter] = ((double)rand()+0.1);
 
 	if(bind)
 		stick_this_thread_to_cpus(high_task_binds, htb_len);
@@ -125,7 +131,7 @@ void* low_util(void *data)
 	long long unsigned int ops = 0;
 	struct timeval t1,t2;
 	long long unsigned int period = 100000;
-	long long unsigned int run_period = 10000;
+	long long unsigned int run_period = 3000;
 	long long unsigned int wall_clock;
 
 	if(bind)
@@ -133,23 +139,17 @@ void* low_util(void *data)
 
 	while(1){
 		gettimeofday(&t1,NULL);
-		while(1)
-		{
-			gettimeofday(&t2,NULL);
-			wall_clock = tvdelta(&t1,&t2);	
-			if(wall_clock >= period)break;
-			if(wall_clock >= run_period){
-				usleep(10);
-			}
-			else{
-				sum += sqrt(rand());
-				ops++;
-			}
-		}
-		pthread_mutex_lock(&output_lock);
-		output+= ops;
+		ops = 0;
+		for(int j=0;j<4*array_size; j++)
+			sum += 45;
+		gettimeofday(&t2,NULL);
+		wall_clock = tvdelta(&t1,&t2);
+		usleep(run_period-wall_clock);
+		/*
+		 pthread_mutex_lock(&output_lock);
+		output+= array_size;
 		pthread_mutex_unlock(&output_lock);
-
+		*/
 	}
 
 	return NULL;
@@ -160,12 +160,13 @@ void* low_util(void *data)
 enum {
 	HELP_LONG_OPT = 1,
 };
-char *option_string = "t:h:n:b";
+char *option_string = "t:h:n:bl:";
 static struct option long_options[] = {
 	{"timeout", required_argument, 0, 't'},
 	{"highutil", required_argument, 0, 'h'},
 	{"threads", required_argument, 0, 'n'},
 	{"bind", no_argument, 0, 'b'},
+	{"length", required_argument, 0, 'l'},
 	{"help", no_argument, 0, HELP_LONG_OPT},
 	{0, 0, 0, 0}
 };
@@ -207,6 +208,12 @@ static void parse_options(int ac, char **av)
 				break;
 			case 'b':
 				bind = 1;
+				break;
+			case 'l':
+				htb_len = atoi(optarg);
+#ifndef Sseperate
+				ltb_len = htb_len;
+#endif
 				break;
 			case '?':
 			case HELP_LONG_OPT:
