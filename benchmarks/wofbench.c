@@ -1,10 +1,35 @@
+/*
+ * This program provides a synthetic workload creation for testing of TurboSched
+ * feature.
+ * 
+ * It uses two kinds of threads:
+ * 1. High util threads: high utilization threads which does important tasks and
+ * should be given most resources for longer durations.
+ * 2. Low util threads: These are basically jitters
+ * which are of no importance
+ * from performanc point of view.
+ *
+ * The program outputs total operations performed during workload execution by
+ * the high util threads.
+ *
+ * Compile: gcc wofbench.c -o wofbench -lpthread
+ * Test 1: wofbench -t 30 -h 4 -n 16
+ * Spawns 16 threads: 4 high_util and 12 low_util jitters for 30 sec
+ *
+ * Test 2: wofbench -t 30 -h 4 -n 16 -b
+ * Along with thread spawining it binds the threads as indicated in array
+ * `high_task_binds` and `low_task_binds`.
+ *
+ * Note: For binding feature, please change the array to specific CPUs available
+ * in the system, as current code is written for a system with 64CPUs.
+ */
 #define _GNU_SOURCE
-#include<stdio.h>
-#include<stdlib.h>
-#include<unistd.h>
-#include<math.h>
-#include<time.h>
-#include<sys/time.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <math.h>
+#include <time.h>
+#include <sys/time.h>
 #include <sched.h>
 #include <pthread.h>
 #include <errno.h>
@@ -20,25 +45,17 @@ static long long unsigned int output = 0;
 static int bind = 0;
 pthread_mutex_t output_lock;
 
-#ifdef Sseperate
-int ltb_len = 4;
-static int low_task_binds[] = {60,61,62,63};
-#else
+/*
+ * Change below array values with specific CPUs to use for thread binding.
+ * Also change the htb/ltb_len = length of the array.
+ */
 int ltb_len =16;
 static int low_task_binds[] = {1,5,9,13,17,21,25,29,33,37,41,45,49,53,57,61};
-#endif
-
 int htb_len = 16;
 static int high_task_binds[] = {0,4,8,12,16,20,24,28,32,36,40,44,48,52,56,60};
-//static int low_task_binds[] = {16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47};
-//static int high_task_binds[] = {0,4,8,12};
-/*
- * gcc wof_load.c -lm -fopenmp -lpthread
- * Taskset high util thread to faster cpu and monitor impact on light util thread when setting it to faster or slower cpu will not impact workload much
- * taskset -c 12,6 ./a.out
- */
 
-void tv_copy(struct timeval* tdest, struct timeval* tsrc){
+void tv_copy(struct timeval* tdest, struct timeval* tsrc)
+{
 	tdest->tv_sec = tsrc->tv_sec;
 	tdest->tv_usec = tsrc->tv_usec;
 }
@@ -51,8 +68,8 @@ void tvsub(struct timeval * tdiff, struct timeval * t1, struct timeval * t0)
 		tdiff->tv_sec--;
 		tdiff->tv_usec += 1000000;
 		if (tdiff->tv_usec < 0) {
-			fprintf(stderr, "lat_fs: tvsub shows test time ran backwards!\n");
-			exit(1);
+			fprintf(stderr, "lat_fs: tvsub shows test time ran \
+					backwards!\n"); exit(1);
 		}
 	}
 
@@ -64,8 +81,8 @@ void tvsub(struct timeval * tdiff, struct timeval * t1, struct timeval * t0)
 }
 
 /*
- * returns the difference between start and stop in usecs.  Negative values
- * are turned into 0
+ * returns the difference between start and stop in usecs.  Negative values are
+ * turned into 0
  */
 unsigned long long tvdelta(struct timeval *start, struct timeval *stop)
 {
@@ -79,7 +96,8 @@ unsigned long long tvdelta(struct timeval *start, struct timeval *stop)
 	return (usecs);
 }
 
-int stick_this_thread_to_cpus(int *cpumask, int cpumask_length) {
+int stick_this_thread_to_cpus(int *cpumask, int cpumask_length)
+{
 	int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
 
 	cpu_set_t cpuset;
@@ -91,12 +109,18 @@ int stick_this_thread_to_cpus(int *cpumask, int cpumask_length) {
 	}
 
 	pthread_t current_thread = pthread_self();    
-	return pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
-}
+	return pthread_setaffinity_np(current_thread, sizeof(cpu_set_t),
+			&cpuset); }
 
 void handle_sigint(int sig) 
 {
 	pthread_exit(NULL);
+}
+
+static int kill_force = 0;
+void kill_signal(int sig)
+{
+	kill_force = 1;
 }
 
 void* high_util(void* data)
@@ -145,11 +169,6 @@ void* low_util(void *data)
 		gettimeofday(&t2,NULL);
 		wall_clock = tvdelta(&t1,&t2);
 		usleep(run_period-wall_clock);
-		/*
-		 pthread_mutex_lock(&output_lock);
-		output+= array_size;
-		pthread_mutex_unlock(&output_lock);
-		*/
 	}
 
 	return NULL;
@@ -160,13 +179,12 @@ void* low_util(void *data)
 enum {
 	HELP_LONG_OPT = 1,
 };
-char *option_string = "t:h:n:bl:";
+char *option_string = "t:h:n:b";
 static struct option long_options[] = {
 	{"timeout", required_argument, 0, 't'},
 	{"highutil", required_argument, 0, 'h'},
 	{"threads", required_argument, 0, 'n'},
 	{"bind", no_argument, 0, 'b'},
-	{"length", required_argument, 0, 'l'},
 	{"help", no_argument, 0, HELP_LONG_OPT},
 	{0, 0, 0, 0}
 };
@@ -175,9 +193,9 @@ static void print_usage(void)
 {
 	fprintf(stderr, "wofbench usage:\n"
 			"\t-t (--timeout): Execution time for the workload in s (def: 10) \n"
-			"\t -h (--highutil): Count of the high utilization threads (def: 1)\n"
-			"\t -n (--threads): Total threads to be spawned (def: 16)\n"
-			"\t -b (--bind): Bind the threads to the cpus\n"
+			"\t -n (--threads): Total threads to be spawned including high_util threads(def: 16)\n"
+			"\t -h (--highutil): Count of the high utilization threads from -n:total threads (def: 1)\n"
+			"\t -b (--bind): Bind the threads to the cpus as defined low_task_binds & high_task_binds (def: no) \n"
 	       );
 	exit(1);
 }
@@ -209,12 +227,6 @@ static void parse_options(int ac, char **av)
 			case 'b':
 				bind = 1;
 				break;
-			case 'l':
-				htb_len = atoi(optarg);
-#ifndef Sseperate
-				ltb_len = htb_len;
-#endif
-				break;
 			case '?':
 			case HELP_LONG_OPT:
 				print_usage();
@@ -233,18 +245,20 @@ static void parse_options(int ac, char **av)
 int main(int argc, char**argv){
 	struct timeval t1,t2;
 	pthread_t *tid;
-	nr_threads = 1;
+	nr_threads = 16;
 	array_size = 10000;
 	highutil_count = 1;
 	timeout = 10000000;
 
 	parse_options(argc, argv);
-	//printf("Running with array_size=%lld highutil_count=%d\n",array_size, highutil_count);
+	printf("Running with array_size=%lld, total threads=%d, highutil_count=%d\n",
+			array_size, nr_threads, highutil_count);
 
 	srand(time(NULL));
 	tid = (pthread_t*)malloc(sizeof(pthread_t)*nr_threads);
 
 	signal(SIGUSR1, handle_sigint);
+	signal(SIGINT, kill_signal);
 
 	gettimeofday(&t1,NULL);
 	for(int i=0; i<nr_threads; i++)
@@ -260,7 +274,7 @@ int main(int argc, char**argv){
 
 	while(1){
 		gettimeofday(&t2,NULL);
-		if(tvdelta(&t1,&t2) >= timeout){
+		if(tvdelta(&t1,&t2) >= timeout || kill_force){
 			for(int i=0; i<nr_threads; i++)
 				pthread_kill(tid[i], SIGUSR1);
 			break;
@@ -272,7 +286,7 @@ int main(int argc, char**argv){
 	for(int i=0; i<nr_threads; i++)
 		pthread_join(tid[i], NULL);
 
-	printf("OPS=%llu\n",output);
+	printf("Total Operations performed=%llu, time passed=%lld us\n",output, tvdelta(&t1,&t2));
 
 	return 0;
 }
