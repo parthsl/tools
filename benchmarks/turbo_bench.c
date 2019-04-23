@@ -19,6 +19,15 @@
  * Along with thread spawining it binds the threads as indicated in array
  * `high_task_binds` and `low_task_binds`.
  *
+ *
+ * Benchmarking TurboSched feature:
+ * ================================
+ * mkdir /sys/fs/cgroup/cpu/jitters
+ * echo 1 > /sys/fs/cgroup/cpu/jitters/cpu.turbo_sched
+ * ./turbo_bench -t 30 -h 10 -n 10 &
+ * ./turbo_bench -t 30 -h 0 -n 10 & 
+ * echo $! > /sys/fs/cgroup/cpu/jitters/cgroup.procs
+ *
  * Note: For binding feature, please change the array to specific CPUs available
  * in the system, as current code is written for a system with 64CPUs.
  *
