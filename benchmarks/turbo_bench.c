@@ -46,6 +46,28 @@
 #include <getopt.h>
 #include <sys/syscall.h>
 #include <signal.h>
+#include <linux/sched.h>
+#include <linux/kernel.h>
+#include <linux/unistd.h>
+#include <linux/types.h>
+#include <sys/syscall.h>
+
+struct sched_attr {
+	__u32 size;
+	__u32 sched_policy;
+	__u64 sched_flags;
+
+	/* SCHED_NORMAL, SCHED_BATCH */
+	__s32 sched_nice;
+	/* SCHED_FIFO, SCHED_RR */
+	__u32 sched_priority;
+	/* SCHED_DEADLINE */
+	__u64 sched_runtime;
+	__u64 sched_deadline;
+	__u64 sched_period;
+	__u32 sched_util_min;
+	__u32 sched_util_max;
+};
 
 static int nr_threads;
 static int highutil_count;
@@ -53,7 +75,9 @@ static long long unsigned int array_size;
 static long long unsigned timeout;
 static long long unsigned int output = 0;
 static int bind = 0;
+static int jitterify = 0;
 pthread_mutex_t output_lock;
+struct sched_attr sattr;
 
 /*
  * Change below array values with specific CPUs to use for thread binding.
@@ -167,9 +191,17 @@ void* low_util(void *data)
 	long long unsigned int period = 100000;
 	long long unsigned int run_period = 3000;
 	long long unsigned int wall_clock;
+	pid_t tid = syscall(SYS_gettid);
 
 	if(bind)
 		stick_this_thread_to_cpus(low_task_binds, ltb_len);
+
+	if (jitterify) {
+		int ret = syscall(SYS_sched_setattr, tid, &sattr, 0);
+		if (ret)
+			perror("Unable to set schedattr from the thread\n");
+	}
+
 
 	while(1){
 		gettimeofday(&t1,NULL);
@@ -189,12 +221,13 @@ void* low_util(void *data)
 enum {
 	HELP_LONG_OPT = 1,
 };
-char *option_string = "t:h:n:b";
+char *option_string = "t:h:n:bj";
 static struct option long_options[] = {
 	{"timeout", required_argument, 0, 't'},
 	{"highutil", required_argument, 0, 'h'},
 	{"threads", required_argument, 0, 'n'},
 	{"bind", no_argument, 0, 'b'},
+	{"jitterify", no_argument, 0, 'j'},
 	{"help", no_argument, 0, HELP_LONG_OPT},
 	{0, 0, 0, 0}
 };
@@ -206,6 +239,7 @@ static void print_usage(void)
 			"\t -n (--threads): Total threads to be spawned including high_util threads(def: 16)\n"
 			"\t -h (--highutil): Count of the high utilization threads from -n:total threads (def: 1)\n"
 			"\t -b (--bind): Bind the threads to the cpus as defined low_task_binds & high_task_binds (def: no) \n"
+			"\t -j (--jitterify): Classify low_util threads as jitter\n" 
 	       );
 	exit(1);
 }
@@ -237,6 +271,9 @@ static void parse_options(int ac, char **av)
 			case 'b':
 				bind = 1;
 				break;
+			case 'j':
+				jitterify = 1;
+				break;
 			case '?':
 			case HELP_LONG_OPT:
 				print_usage();
@@ -263,6 +300,10 @@ int main(int argc, char**argv){
 	parse_options(argc, argv);
 	printf("Running with array_size=%lld, total threads=%d, highutil_count=%d\n",
 			array_size, nr_threads, highutil_count);
+
+	sattr.size = sizeof(struct sched_attr);
+	sattr.sched_util_max = 0;
+	sattr.sched_flags = 0x40;
 
 	srand(time(NULL));
 	tid = (pthread_t*)malloc(sizeof(pthread_t)*nr_threads);
