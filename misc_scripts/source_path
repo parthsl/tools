@@ -3,21 +3,40 @@ alias l="ls -ath"
 alias gc="git checkout"
 alias gb="git branch"
 alias gst="git status"
+alias stst="stg status"
+alias str="stg refresh"
+alias stpu="stg push"
+alias stpo="stg pop"
+alias sts="stg series"
+alias stsh="stg show"
 alias cdl="cd ~/Documents/linux/"
+alias cdi="cd ~/Documents/ibm/tools"
 alias du="ncdu --color dark -rr -x --exclude .git --exclude node_modules"
+alias gl="git log --oneline"
+alias scpp="sshpass -p abc123 scp"
 
 bso() {
 	cat ~/bso_clear.sh.ecp | openssl aes-256-cbc -d | sed "s/fir02/$1/g" | /usr/bin/expect -
 }
 
+hackernews() {
+	curl getnews.tech/hacker-news
+}
+
 sshp8() {
-	sshpass -p abc123 ssh root@$1
+	sshpass -p abc123 ssh root@$1 -o StrictHostKeyChecking=no UserKnownHostsFile=/dev/null -o LogLevel=quiet
+	if [ $? -ne 0 ];
+	then 
+		ssh-keygen -R $1;
+		sshpass -p abc123 ssh root@$1 -o StrictHostKeyChecking=no
+	fi
 }
 
 gn() {
 	curl getnews.tech/$1
 }
 
-alias gl="git log --oneline"
+export CSCOPE_EDITOR=vim
 
 source ~/path
+alias llm="~/Documents/ibm/tools/lab_access.sh"
