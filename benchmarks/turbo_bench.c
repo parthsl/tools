@@ -67,6 +67,7 @@ struct sched_attr {
 	__u64 sched_period;
 	__u32 sched_util_min;
 	__u32 sched_util_max;
+	__u32 is_jitter;
 };
 
 static int nr_threads;
@@ -75,7 +76,7 @@ static long long unsigned int array_size;
 static long long unsigned timeout;
 static long long unsigned int output = 0;
 static int bind = 0;
-static int jitterify = 0;
+static int do_syscall = 0;
 pthread_mutex_t output_lock;
 struct sched_attr sattr;
 
@@ -196,7 +197,7 @@ void* low_util(void *data)
 	if(bind)
 		stick_this_thread_to_cpus(low_task_binds, ltb_len);
 
-	if (jitterify) {
+	if (do_syscall) {
 		int ret = syscall(SYS_sched_setattr, tid, &sattr, 0);
 		if (ret)
 			perror("Unable to set schedattr from the thread\n");
@@ -221,13 +222,14 @@ void* low_util(void *data)
 enum {
 	HELP_LONG_OPT = 1,
 };
-char *option_string = "t:h:n:bj";
+char *option_string = "t:h:n:bju";
 static struct option long_options[] = {
 	{"timeout", required_argument, 0, 't'},
 	{"highutil", required_argument, 0, 'h'},
 	{"threads", required_argument, 0, 'n'},
 	{"bind", no_argument, 0, 'b'},
 	{"jitterify", no_argument, 0, 'j'},
+	{"uclampmax0", no_argument, 0, 'u'},
 	{"help", no_argument, 0, HELP_LONG_OPT},
 	{0, 0, 0, 0}
 };
@@ -240,6 +242,7 @@ static void print_usage(void)
 			"\t -h (--highutil): Count of the high utilization threads from -n:total threads (def: 1)\n"
 			"\t -b (--bind): Bind the threads to the cpus as defined low_task_binds & high_task_binds (def: no) \n"
 			"\t -j (--jitterify): Classify low_util threads as jitter\n" 
+			"\t -u (--uclampmax0): set max uclamp to lowest=0\n"
 	       );
 	exit(1);
 }
@@ -271,8 +274,15 @@ static void parse_options(int ac, char **av)
 			case 'b':
 				bind = 1;
 				break;
+			case 'u':
+				sattr.sched_util_max = 0;
+				sattr.sched_flags = 0x40;
+				do_syscall = 1;
+				break;
 			case 'j':
-				jitterify = 1;
+				sattr.is_jitter = 1;
+				sattr.sched_flags = 0x80;
+				do_syscall = 1;
 				break;
 			case '?':
 			case HELP_LONG_OPT:
@@ -302,8 +312,6 @@ int main(int argc, char**argv){
 			array_size, nr_threads, highutil_count);
 
 	sattr.size = sizeof(struct sched_attr);
-	sattr.sched_util_max = 0;
-	sattr.sched_flags = 0x40;
 
 	srand(time(NULL));
 	tid = (pthread_t*)malloc(sizeof(pthread_t)*nr_threads);
