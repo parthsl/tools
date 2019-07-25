@@ -22,6 +22,13 @@
  *
  * Benchmarking TurboSched feature:
  * ================================
+ * TurboSched RFC v4:
+ * i=8; ./turbo_bench -t 30 -h $i -n $((i*2)) -j 
+ *
+ * TurboSched RFCv3:
+ * i=8; ./turbo_bench -t 30 -h $i -n $((i*2)) -u
+ *
+ * TurboSched RFCv1 or RFCv2:
  * mkdir /sys/fs/cgroup/cpu/jitters
  * echo 1 > /sys/fs/cgroup/cpu/jitters/cpu.turbo_sched
  * ./turbo_bench -t 30 -h 10 -n 10 &
@@ -31,7 +38,7 @@
  * Note: For binding feature, please change the array to specific CPUs available
  * in the system, as current code is written for a system with 64CPUs.
  *
- * Author(s): Parth Shah <pshah015@linux.ibm.com>
+ * Author(s): Parth Shah <parth@linux.ibm.com> <parths1229@gmail.com>
  */
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -67,7 +74,6 @@ struct sched_attr {
 	__u64 sched_period;
 	__u32 sched_util_min;
 	__u32 sched_util_max;
-	__u32 is_jitter;
 };
 
 static int nr_threads;
@@ -280,7 +286,6 @@ static void parse_options(int ac, char **av)
 				do_syscall = 1;
 				break;
 			case 'j':
-				sattr.is_jitter = 1;
 				sattr.sched_flags = 0x80;
 				do_syscall = 1;
 				break;
