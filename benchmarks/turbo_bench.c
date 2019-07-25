@@ -67,7 +67,6 @@ struct sched_attr {
 	__u64 sched_period;
 	__u32 sched_util_min;
 	__u32 sched_util_max;
-	__u32 is_jitter;
 };
 
 static int nr_threads;
@@ -280,7 +279,6 @@ static void parse_options(int ac, char **av)
 				do_syscall = 1;
 				break;
 			case 'j':
-				sattr.is_jitter = 1;
 				sattr.sched_flags = 0x80;
 				do_syscall = 1;
 				break;
