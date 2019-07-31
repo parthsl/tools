@@ -81,9 +81,11 @@ static int highutil_count;
 static long long unsigned int array_size;
 static long long unsigned timeout;
 static long long unsigned int output = 0;
+static long long unsigned int output_small = 0;
 static int bind = 0;
 static int do_syscall = 0;
 pthread_mutex_t output_lock;
+pthread_mutex_t output_small_lock;
 struct sched_attr sattr;
 
 /*
@@ -193,11 +195,11 @@ void* high_util(void* data)
 void* low_util(void *data)
 {
 	long long unsigned int sum = 0;
-	long long unsigned int ops = 0;
 	struct timeval t1,t2;
 	long long unsigned int period = 100000;
 	long long unsigned int run_period = 3000;
 	long long unsigned int wall_clock;
+
 	pid_t tid = syscall(SYS_gettid);
 
 	if(bind)
@@ -212,10 +214,12 @@ void* low_util(void *data)
 
 	while(1){
 		gettimeofday(&t1,NULL);
-		ops = 0;
 		for(int j=0;j<4*array_size; j++)
 			sum += 45;
 		gettimeofday(&t2,NULL);
+		pthread_mutex_lock(&output_small_lock);
+		output_small += array_size;
+		pthread_mutex_unlock(&output_small_lock);
 		wall_clock = tvdelta(&t1,&t2);
 		usleep(run_period-wall_clock);
 	}
@@ -350,7 +354,7 @@ int main(int argc, char**argv){
 	for(int i=0; i<nr_threads; i++)
 		pthread_join(tid[i], NULL);
 
-	printf("Total Operations performed=%llu, time passed=%lld us\n",output, tvdelta(&t1,&t2));
+	printf("Total Operations performed=%llu, Jitter Operations=%llu, time passed=%lld us\n",output, output_small, tvdelta(&t1,&t2));
 
 	return 0;
 }
