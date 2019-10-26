@@ -3,6 +3,7 @@ import cv2
 import time
 import subprocess
 import sys
+import time
 
 from os.path import expanduser
 HOME = expanduser("~")
@@ -30,7 +31,7 @@ def is_locked():
     return False
 
 def is_open():
-    result = str(subprocess.check_output(['cat', '/proc/acpi/button/lid/LID0/state']))
+    result = str(subprocess.check_output(['cat', '/proc/acpi/button/lid/LID/state']))
     if "open" in result:
         return True
     return False
@@ -59,8 +60,11 @@ def authenticate(video_capture):
         if(authorized_user_present):
             unlock()
             break
+        time.sleep(5)
 
 while True:
+    time.sleep(5)
+
     if(is_locked() and is_open()):
         # Get a reference to webcam #0 (the default one)
         video_capture = cv2.VideoCapture(0)
