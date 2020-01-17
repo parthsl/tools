@@ -1,42 +1,16 @@
 /*
- * This program provides a synthetic workload creation for testing of TurboSched
- * feature.
+ * This program is used to measure wakeup delay added to the jitter task
+ *
+ * One can run the program as
+ * ./delay -t 30 -h 8 -n 16 -j
+ * This will classify 8 small tasks as jitters
+ *
+ * The result shows the percentile based latency values.
  * 
- * It uses two kinds of threads:
- * 1. High util threads: high utilization threads which does important tasks and
- * should be given most resources for longer durations.
- * 2. Low util threads: These are basically jitters which are of least importance
- * from performance point of view.
- *
- * The program outputs total operations performed during workload execution by
- * the high util threads.
- *
- * Compile: gcc turbo_bench.c -o turbo_bench -lpthread
- * Test 1: turbo_bench -t 30 -h 4 -n 16
- * Spawns 16 threads: 4 high_util and 12 low_util jitters for 30 sec
- *
- * Test 2 with thread binding: turbo_bench -t 30 -h 4 -n 16 -b
- * Along with thread spawining it binds the threads as indicated in array
- * `high_task_binds` and `low_task_binds`.
- *
- *
- * Benchmarking TurboSched feature:
- * ================================
- * TurboSched RFC v4:
- * i=8; ./turbo_bench -t 30 -h $i -n $((i*2)) -j 
- *
- * TurboSched RFCv3:
- * i=8; ./turbo_bench -t 30 -h $i -n $((i*2)) -u
- *
- * TurboSched RFCv1 or RFCv2:
- * mkdir /sys/fs/cgroup/cpu/jitters
- * echo 1 > /sys/fs/cgroup/cpu/jitters/cpu.turbo_sched
- * ./turbo_bench -t 30 -h 10 -n 10 &
- * ./turbo_bench -t 30 -h 0 -n 10 & 
- * echo $! > /sys/fs/cgroup/cpu/jitters/cgroup.procs
- *
- * Note: For binding feature, please change the array to specific CPUs available
- * in the system, as current code is written for a system with 64CPUs.
+ * The jitter tasks when records the timestamp before and after the sleep.
+ * Now since task knows the amount of time it is going to sleep, it predicts
+ * the time when it will be woken up. This is useful in taking delta with the
+ * sleep time thus giving the time it took to get scheduled on the runqueue.
  *
  * Author(s): Parth Shah <parth@linux.ibm.com> <parths1229@gmail.com>
  */
@@ -192,13 +166,22 @@ void* high_util(void* data)
 	return NULL;
 }
 
+#define QUEUE_SIZE 100000
+int delta_queueing[QUEUE_SIZE];
+int top = 0;
+pthread_mutex_t ptop;
+
 void* low_util(void *data)
 {
 	long long unsigned int sum = 0;
 	struct timeval t1,t2;
 	long long unsigned int period = 100000;
-	long long unsigned int run_period = 3000;
-	long long unsigned int wall_clock;
+	long long int run_period = 3000;
+	long long int wall_clock;
+	struct timeval sleep_timestamp, wake_timestamp;
+	long long int queue_time = 0;
+	int mytop = 0;
+
 
 	pid_t tid = syscall(SYS_gettid);
 
@@ -221,7 +204,16 @@ void* low_util(void *data)
 		output_small += array_size;
 		pthread_mutex_unlock(&output_small_lock);
 		wall_clock = tvdelta(&t1,&t2);
+
+		gettimeofday(&sleep_timestamp, NULL);
 		usleep(run_period-wall_clock);
+		gettimeofday(&wake_timestamp, NULL);
+		queue_time = tvdelta(&sleep_timestamp, &wake_timestamp)-(run_period-wall_clock);
+		pthread_mutex_lock(&ptop);
+		mytop = top++;
+		if (top>= QUEUE_SIZE) top = 0;
+		pthread_mutex_unlock(&ptop);
+		delta_queueing[mytop] = queue_time;
 	}
 
 	return NULL;
@@ -308,6 +300,11 @@ static void parse_options(int ac, char **av)
 	}
 }
 
+int cmpfun(const void *a, const void* b)
+{
+	return ( *(int*)a - *(int*)b );
+}
+
 int main(int argc, char**argv){
 	struct timeval t1,t2;
 	pthread_t *tid;
@@ -355,6 +352,15 @@ int main(int argc, char**argv){
 		pthread_join(tid[i], NULL);
 
 	printf("Total Operations performed=%llu, Jitter Operations=%llu, time passed=%lld us\n",output, output_small, tvdelta(&t1,&t2));
+
+	printf("Latency percentiles (usec)\n");
+	qsort(delta_queueing, top, sizeof(delta_queueing[0]), cmpfun);
+	printf("50.0th : %d\n",delta_queueing[top-(50*top/100)]);
+	printf("90.0th : %d\n",delta_queueing[top-(10*top/100)]);
+	printf("95.0th : %d\n",delta_queueing[top-(5*top/100)]);
+	printf("*99.0th : %d\n",delta_queueing[top-(1*top/100)]);
+	printf("99.99th : %d\n",delta_queueing[(int)(top-(0.01*top/100))]);
+	printf("min = %d, max = %d\n",delta_queueing[0],delta_queueing[top-1]);
 
 	return 0;
 }

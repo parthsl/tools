@@ -1,3 +1,16 @@
+/* 
+ * This program is used to do syscall from outside the program.
+ *
+ * Sample script to do syscall on all the tasks of some program ($bench), one
+ * can use something like
+ *
+ * ```
+ * bench="turbobench";
+ * until [ `pidof $bench` ]; do :; done;
+ * ps -eLf | grep "$bench -h" | grep -v "grep" | cut -d" " -f9 | while read i; do ./setattr -p $i -j; done
+ * ```
+ *
+ */
 #define _GNU_SOURCE
 #include <unistd.h>
 #include <linux/types.h>
@@ -12,6 +25,7 @@
 #define SCHED_FLAG_KEEP_PARAMS		0x10
 #define SCHED_FLAG_UTIL_CLAMP_MIN	0x20
 #define SCHED_FLAG_UTIL_CLAMP_MAX	0x40
+#define SCHED_FLAG_LATENCY_TOLERANCE	0X80
 
 struct sched_attr {
 	__u32 size;
@@ -28,31 +42,39 @@ struct sched_attr {
 	__u64 sched_period;
 	__u32 sched_util_min;
 	__u32 sched_util_max;
+
+	__s32 sched_latency_tolerance;
 };
 
-struct sched_attr attr;
-__u64 uclamp_min, uclamp_max = 0;
-int user_defined = 1;//2=min only, 3=max only, 6=both
+struct sched_attr sattr;
+__u64 uclamp_min=1024, uclamp_max = 1024;
+__s32 latency_tolerance = 0;
+
 int pid = 1;
+int do_syscall = 0;
 
 enum {
 	HELP_LONG_OPT = 1,
 };
-char *option_string = "b:t:p:";
+char *option_string = "b:t:p:jl:";
 static struct option long_options[] = {
 	{"throttle", required_argument, 0, 't'},
 	{"boost", required_argument, 0, 'b'},
 	{"pid", required_argument, 0, 'p'},
+	{"jitterify", no_argument, 0, 'j'},
+	{"latency", required_argument, 0, 'l'},
 	{"help", no_argument, 0, HELP_LONG_OPT},
 	{0, 0, 0, 0}
 };
 
 static void print_usage(void)
 {
-	fprintf(stderr, "turbo_bench usage:\n"
+	fprintf(stderr, "sched_setattr set usage:\n"
 			"\t-t (--throttle): Set util.max to throttle frequency (def: 0) \n"
 			"\t-b (--boost): Set util.min to boost the frequency (def: 0) \n"
 			"\t-p (--pid): PID of a task to CLAMP the util\n"
+			"\t-j (--jitter): TurboSched RFCv4 based task jiterrify\n"
+			"\t-l (--latency): Latency tolerance of the task\n"
 	       );
 	exit(1);
 }
@@ -72,15 +94,26 @@ static void parse_options(int ac, char **av)
 
 		switch(c) {
 			case 't':
-				sscanf(optarg,"%llu",&uclamp_max);
-				user_defined *= 3;
+				sscanf(optarg,"%lu",&uclamp_max);
+				sattr.sched_util_max = uclamp_max;
+				sattr.sched_flags |= SCHED_FLAG_UTIL_CLAMP_MAX;
 				break;
 			case 'b':
-				sscanf(optarg,"%llu",&uclamp_min);
-				user_defined *= 2;
+				sscanf(optarg,"%lu",&uclamp_min);
+				sattr.sched_util_min = uclamp_min;
+				sattr.sched_flags |= SCHED_FLAG_UTIL_CLAMP_MIN;
 				break;
 			case 'p':
 				sscanf(optarg,"%d",&pid);
+				break;
+			case 'j':
+				sattr.sched_flags |= 0x80;
+				do_syscall = 1;
+				break;
+			case 'l':
+				sscanf(optarg, "%d", &latency_tolerance);
+				sattr.sched_latency_tolerance = latency_tolerance;
+				sattr.sched_flags |= SCHED_FLAG_LATENCY_TOLERANCE;
 				break;
 			case '?':
 			case HELP_LONG_OPT:
@@ -100,24 +133,14 @@ static void parse_options(int ac, char **av)
 
 int main(int argc, char** argv)
 {
-	__u64 uclamp_min, uclamp_max;
-	int pid;
 	int ret;
+
+	sattr.size = sizeof(struct sched_attr);
+	sattr.sched_flags = 0;
 
 	parse_options(argc, argv);
 
-	attr.size = sizeof(struct sched_attr);
-	attr.sched_flags = 0;
-	if (user_defined%2 != 0) {
-		attr.sched_util_min = uclamp_min;
-		attr.sched_flags |= SCHED_FLAG_UTIL_CLAMP_MIN;
-	}
-	if (user_defined%3 != 0) {
-		attr.sched_util_max = uclamp_max;
-		attr.sched_flags |= SCHED_FLAG_UTIL_CLAMP_MAX;
-	}
-
-	ret = syscall(SYS_sched_setattr, pid, &attr, 0);
+	ret = syscall(SYS_sched_setattr, pid, &sattr, 0);
 	if (ret)
 		printf("Unable to do syscall\n");
 
