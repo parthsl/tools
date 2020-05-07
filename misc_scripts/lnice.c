@@ -64,8 +64,9 @@ static struct option long_options[] = {
 
 static void print_usage(void)
 {
-	fprintf(stderr, "lnice [option] COMMAND:\n"
-			"\t lnice [-s | -l] COMMAND\n"
+	fprintf(stderr, "lnice [OPTION] COMMAND:\n"
+			"\t -s(--set) VAL: set latency_nice value to VAL\n"
+			"\t -l(--latencynice) VAL: same as --set\n"
 	       );
 	exit(1);
 }
