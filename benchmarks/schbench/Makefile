@@ -15,6 +15,8 @@ all: $(ALL)
 schbench: schbench.o
 	$(CC) $(ALL_CFLAGS) -o $@ $(filter %.o,$^) -lpthread
 
+schperf: schbench.o
+	$(CC) $(ALL_CFLAGS) -o schperf $(filter %.o,$^) -lpthread -DDPERF
 depend:
 	@$(CC) -MM $(ALL_CFLAGS) *.c 1> .depend
 

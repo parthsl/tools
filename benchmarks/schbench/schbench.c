@@ -20,6 +20,110 @@
 #include <string.h>
 #include <linux/futex.h>
 #include <sys/syscall.h>
+#include <sys/ioctl.h>
+#include "perf_event.h"
+#include <assert.h>
+
+#define BUFFER_LENGTH	(1024*2048*8)
+#define CPUMASKSIZE	1024
+
+#define USERSPACE_ONLY
+
+#ifndef __NR_perf_event_open
+#if defined(__PPC__)
+#define __NR_perf_event_open	319
+#elif defined(__i386__)
+#define __NR_perf_event_open	336
+#elif defined(__x86_64__)
+#define __NR_perf_event_open	298
+#else
+#error __NR_perf_event_open must be defined
+#endif
+#endif
+
+static inline int sys_perf_event_open(struct perf_event_attr *attr, pid_t pid,
+				      int cpu, int group_fd,
+				      unsigned long flags)
+{
+	attr->size = sizeof(*attr);
+	return syscall(__NR_perf_event_open, attr, pid, cpu, group_fd, flags);
+}
+
+static int cache_refs_fd[CPUMASKSIZE];
+static int cache_miss_fd[CPUMASKSIZE];
+static unsigned long long time_diff[CPUMASKSIZE];
+
+static void setup_counters(int tid)
+{
+	struct perf_event_attr attr;
+
+	memset(&attr, 0, sizeof(attr));
+#ifdef USERSPACE_ONLY
+	attr.exclude_kernel = 1;
+	attr.exclude_hv = 1;
+	attr.exclude_idle = 1;
+#endif
+
+	attr.disabled = 1;
+	attr.type = PERF_TYPE_HARDWARE;
+	attr.config = PERF_COUNT_HW_CACHE_REFERENCES;
+	cache_refs_fd[tid] = sys_perf_event_open(&attr, 0, -1, -1, 0);
+	if (cache_refs_fd[tid] < 0) {
+		perror("sys_perf_event_open");
+		exit(1);
+	}
+
+	/*
+	 * We use cache_refs_fd as the group leader in order to ensure
+	 * both counters run at the same time and our CPI statistics are
+	 * valid.
+	 */
+	attr.disabled = 0; /* The group leader will start/stop us */
+	attr.type = PERF_TYPE_HARDWARE;
+	attr.config = PERF_COUNT_HW_CACHE_MISSES;
+	cache_miss_fd[tid] = sys_perf_event_open(&attr, 0, -1, cache_refs_fd[tid], 0);
+	if (cache_miss_fd[tid] < 0) {
+		perror("sys_perf_event_open");
+		exit(1);
+	}
+}
+
+static void start_counters(int tid)
+{
+	/* Only need to start and stop the group leader */
+	ioctl(cache_refs_fd[tid], PERF_EVENT_IOC_ENABLE);
+}
+
+static void stop_counters(int tid)
+{
+	ioctl(cache_refs_fd[tid], PERF_EVENT_IOC_DISABLE);
+}
+
+static void reset_counters(int tid)
+{
+	ioctl(cache_refs_fd[tid], PERF_EVENT_IOC_RESET);
+	ioctl(cache_miss_fd[tid], PERF_EVENT_IOC_RESET);
+}
+
+unsigned long long cache_refs_total[CPUMASKSIZE];
+unsigned long long cache_miss_total[CPUMASKSIZE];
+
+static void read_counters(int tid)
+{
+	size_t res;
+	unsigned long long cache_refs;
+	unsigned long long cache_misses;
+
+	res = read(cache_refs_fd[tid], &cache_refs, sizeof(unsigned long long));
+	assert(res == sizeof(unsigned long long));
+
+	res = read(cache_miss_fd[tid], &cache_misses, sizeof(unsigned long long));
+	assert(res == sizeof(unsigned long long));
+
+	cache_refs_total[tid] += cache_refs;
+	cache_miss_total[tid] += cache_misses;
+}
+// PMU SETUP COMPLETED
 
 #define PLAT_BITS	8
 #define PLAT_VAL	(1 << PLAT_BITS)
@@ -44,6 +148,8 @@ static unsigned long long cputime = 30000;
 static int autobench = 0;
 /* -p bytes */
 static int pipe_test = 0;
+/* cache test */
+static int cache_test = 0;
 /* -R requests per sec */
 static int requests_per_sec = 0;
 
@@ -73,7 +179,7 @@ enum {
 	HELP_LONG_OPT = 1,
 };
 
-char *option_string = "p:am:t:s:c:r:R:";
+char *option_string = "p:am:t:s:c:r:R:l:";
 static struct option long_options[] = {
 	{"auto", no_argument, 0, 'a'},
 	{"pipe", required_argument, 0, 'p'},
@@ -83,6 +189,7 @@ static struct option long_options[] = {
 	{"rps", required_argument, 0, 'R'},
 	{"sleeptime", required_argument, 0, 's'},
 	{"cputime", required_argument, 0, 'c'},
+	{"cachetest", required_argument, 0, 'l'},
 	{"help", no_argument, 0, HELP_LONG_OPT},
 	{0, 0, 0, 0}
 };
@@ -98,6 +205,7 @@ static void print_usage(void)
 		"\t-a (--auto): grow thread count until latencies hurt (def: off)\n"
 		"\t-p (--pipe): transfer size bytes to simulate a pipe test (def: 0)\n"
 		"\t-R (--rps): requests per second mode (count, def: 0)\n"
+		"\t-l (--cachetest): cache test value (count, def: 0)\n"
 	       );
 	exit(1);
 }
@@ -111,6 +219,7 @@ static void parse_options(int ac, char **av)
 	while (1) {
 		int option_index = 0;
 
+
 		c = getopt_long(ac, av, option_string,
 				long_options, &option_index);
 
@@ -120,6 +229,14 @@ static void parse_options(int ac, char **av)
 		switch(c) {
 		case 'a':
 			autobench = 1;
+			break;
+		case 'l':
+			cache_test = atoi(optarg);
+			if (cache_test > BUFFER_LENGTH) {
+				fprintf(stderr, "Buffer size too big, using %d\n",
+					BUFFER_LENGTH);
+				cache_test = BUFFER_LENGTH;
+			}
 			break;
 		case 'p':
 			pipe_test = atoi(optarg);
@@ -387,6 +504,8 @@ struct request {
  * giant stats struct
  */
 struct thread_data {
+	int	index;
+
 	pthread_t tid;
 	/* ->next is for placing us on the msg_thread's list for waking */
 	struct thread_data *next;
@@ -411,6 +530,9 @@ struct thread_data {
 	double loops_per_sec;
 
 	char pipe_page[PIPE_TRANSFER_BUFFER];
+
+	double buffer[BUFFER_LENGTH];
+	volatile double sum;
 };
 
 /* we're so fancy we make our own futex wrappers */
@@ -580,12 +702,30 @@ static void xlist_wake_all(struct thread_data *td)
 	struct thread_data *list;
 	struct thread_data *next;
 	struct timeval now;
+	struct timeval start, stop;
 
 	list = xlist_splice(td);
 	gettimeofday(&now, NULL);
 	while (list) {
 		next = list->next;
 		list->next = NULL;
+
+		if (cache_test) {
+			gettimeofday(&start, NULL);
+#ifndef NO_PERF_COUNTERS
+			reset_counters(td->index);
+			start_counters(td->index);
+#endif
+			for(int i=0; i<cache_test; i+=129)
+				td->sum += td->buffer[i];
+#ifndef NO_PERF_COUNTERS
+			stop_counters(td->index);
+			read_counters(td->index);
+#endif
+			gettimeofday(&stop, NULL);
+			time_diff[td->index] += tvdelta(&start, &stop);
+		}
+
 		if (pipe_test) {
 			memset(list->pipe_page, 1, pipe_test);
 			gettimeofday(&list->wake_time, NULL);
@@ -611,6 +751,15 @@ static struct request *msg_and_wait(struct thread_data *td)
 
 	if (pipe_test)
 		memset(td->pipe_page, 2, pipe_test);
+
+	/*
+ 	 * Write to master thread buffer. Let it have race condition with
+	 * other workers, it doesn't matter for this junk data.
+	 */
+	if (cache_test) {
+		for (int i=0; i<cache_test; i++)
+			td->msg_thread->buffer[i] = rand();
+	}
 
 	/* set ourselves to blocked */
 	td->futex = FUTEX_BLOCKED;
@@ -661,6 +810,13 @@ static void run_msg_thread(struct thread_data *td)
 	int max_jitter = sleeptime / 4;
 	int jitter = 0;
 
+	if (cache_test) {
+		for(int i=0; i<cache_test; i++)
+			td->buffer[i] = rand();
+#ifndef NO_PERF_COUNTERS
+		setup_counters(td->index);
+#endif
+	}
 	while (1) {
 		td->futex = FUTEX_BLOCKED;
 		xlist_wake_all(td);
@@ -842,7 +998,6 @@ void *message_thread(void *arg)
 
 	for (i = 0; i < worker_threads; i++) {
 		pthread_t tid;
-
 		worker_threads_mem[i].msg_thread = td;
 		ret = pthread_create(&tid, NULL, worker_thread,
 				     worker_threads_mem + i);
@@ -922,6 +1077,7 @@ int main(int ac, char **av)
 	int p95 = 0;
 	double diff;
 
+
 	parse_options(ac, av);
 	if (autobench && requests_per_sec == 1) {
 		unsigned long per_thread = 1000000 / (cputime + cputime / 4);
@@ -949,6 +1105,8 @@ again:
 	/* start our message threads, each one starts its own workers */
 	for (i = 0; i < message_threads; i++) {
 		pthread_t tid;
+		message_threads_mem[i].index = i;
+
 		ret = pthread_create(&tid, NULL, message_thread,
 				     message_threads_mem + i);
 		if (ret) {
@@ -1024,6 +1182,17 @@ again:
 		       loops_per_sec, mb_per_sec, pretty);
 
 	}
+
+	if(cache_test) {
+		for (i = 0; i < message_threads; i++)
+			printf("tid=%d: Total time penalty for cache access=%llu\n",i, time_diff[i]);
+	}
+
+	if (cache_test) {
+		for (i = 0; i < message_threads; i++)
+			printf("tid=%d cacche-miss-rate=%f%%  total-cache-ref=%lld total-cache-miss=%lld\n",i, (double)100.0*cache_miss_total[i]/cache_refs_total[i], cache_refs_total[i], cache_miss_total[i]);
+	}
+
 	if (requests_per_sec) {
 		diff = (double)p99 / cputime;
 		fprintf(stdout, "rps: %.2f p95 (usec) %d p99 (usec) %d p95/cputime %.2f%% p99/cputime %.2f%%\n",
