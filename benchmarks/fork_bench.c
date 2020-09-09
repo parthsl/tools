@@ -1,3 +1,17 @@
+/* Benchmark fork() calls
+ * Each thread should spread across all CPUs uniformly
+ *
+ * $> gcc fork_bench.c -lpthread -o fork_bench
+ * $> ./fork_bench -t 10 -l 2 -r 2                                                                                                                        (base) 
+ * t=10 r=2.000000
+ * Benchmark: Create/teardown of 10 threads...
+ * 200202.798843 us / thread
+ * Number of threads per CPU, {cpuid : nrscheduled}
+ * {88 : 1, 100 : 1, 108 : 1, 116 : 1, 124 : 1, 132 : 1, 136 : 1, 144 : 1, 152 : 1, 164 : 1} 
+ * 200192.999840 us / thread
+ * Number of threads per CPU, {cpuid : nrscheduled}
+ * {88 : 1, 100 : 1, 108 : 1, 124 : 1, 132 : 1, 136 : 1, 144 : 1, 152 : 1, 164 : 1, 168 : 1}
+ */
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <sys/time.h>
