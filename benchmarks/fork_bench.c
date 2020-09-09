@@ -2,15 +2,16 @@
  * Each thread should spread across all CPUs uniformly
  *
  * $> gcc fork_bench.c -lpthread -o fork_bench
- * $> ./fork_bench -t 10 -l 2 -r 2                                                                                                                        (base) 
+ * $> ./fork_bench -t 10 -l 2 -r 2
  * t=10 r=2.000000
  * Benchmark: Create/teardown of 10 threads...
- * 200202.798843 us / thread
  * Number of threads per CPU, {cpuid : nrscheduled}
- * {88 : 1, 100 : 1, 108 : 1, 116 : 1, 124 : 1, 132 : 1, 136 : 1, 144 : 1, 152 : 1, 164 : 1} 
- * 200192.999840 us / thread
+ * 88 : 1, 96 : 1, 108 : 1, 112 : 1, 116 : 1, 120 : 1, 128 : 1, 140 : 1, 148 : 1, 156 : 1} 
  * Number of threads per CPU, {cpuid : nrscheduled}
- * {88 : 1, 100 : 1, 108 : 1, 124 : 1, 132 : 1, 136 : 1, 144 : 1, 152 : 1, 164 : 1, 168 : 1}
+ * {88 : 1, 96 : 1, 108 : 1, 116 : 1, 120 : 1, 128 : 1, 140 : 1, 148 : 1, 156 : 1, 168 : 1} 
+ * Best time= 200125.312805 us / thread
+ *
+ * @author: Parth Shah <parths1229@gmail.com>
  */
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -194,7 +195,6 @@ int main(int argc, char **argv) {
 		}
 
 		// Pretty print output statistics
-		printf("%f us / thread\n", (best_time / (double)nrthreads) * 1000000.0);
 		printf("Number of threads per CPU, {cpuid : nrscheduled}\n {");
 		for(int i=0; i<NPROCS; i++) {
 			if (nr_per_cpus[i])
@@ -205,5 +205,6 @@ int main(int argc, char **argv) {
 
 	}while (--loop);
 
+	printf("Best time= %f us / thread\n", (best_time / (double)nrthreads) * 1000000.0);
 	return 0;
 }
