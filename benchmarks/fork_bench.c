@@ -57,7 +57,6 @@ static void* thread_fun(void* arg) {
 	pthread_mutex_lock(&lock);
 	if (nr_per_cpus[cur_cpu]) {
 		fprintf(stderr,"Error: %d Threads scheduled on CPU=%d\n",++nr_per_cpus[cur_cpu], cur_cpu);
-		pthread_mutex_unlock(&lock);
 	} else {
 		nr_per_cpus[cur_cpu]++;
 	}
