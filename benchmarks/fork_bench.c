@@ -8,8 +8,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-static double runtime = -1;
+static int loop = 1;
+static double runtime = 5;
 static int nrthreads = 100;
+static int dowork = 1;
+#ifndef WSS
+#define WSS 1024*8
+#endif
 
 #define NPROCS 1024
 static int nr_per_cpus[NPROCS];
@@ -42,7 +47,20 @@ static void* thread_fun(void* arg) {
 		nr_per_cpus[cur_cpu]++;
 	}
 	pthread_mutex_unlock(&lock);
-	
+
+	if(dowork) {
+		int ws[WSS];
+		volatile int sum = 0;
+		FILE *fd = fopen("/dev/null", "w");
+		double start_t	= get_time();
+		while(get_time()-start_t < runtime) {
+			for(int i=0;i<WSS; i++)
+				sum += ws[i];
+		}
+		fprintf(fd,"%d",sum);
+		fclose(fd);
+
+	}
 	return (void*)0;
 }
 
@@ -65,19 +83,23 @@ static const double BENCHMARK_TIME = 5.0;
 enum {
 	HELP_LONG_OPT = 1,
 };
-char *option_string = "t:r:h";
+char *option_string = "t:r:hdl:";
 static struct option long_options[] = {
 	{"threads", required_argument, 0, 't'},
 	{"runtime", required_argument, 0, 'r'},
+	{"doworkd", no_argument, 0, 'd'},
 	{"help", no_argument, 0, HELP_LONG_OPT},
+	{"loop", required_argument, 0, 'l'},
 	{0, 0, 0, 0}
 };
 
 static void print_usage(void)
 {
 	fprintf(stderr, "fork_bench usage:\n"
-			"\t-r (--runtime): Execution time for the workload in sec. Using this flag imposes mutiple iteration of thread creations for runtime sec (def: -1) \n"
+			"\t-r (--runtime): Worker threads does runtime sec of work (def: 5sec) \n"
 			"\t-t (--threads): Total threads to be spawned (def: 100)\n"
+			"\t-d (--dowork): Do some work after fork (def: 1, true, set 0 to false)\n"
+			"\t-l (--loop): loop the program for given number of iterations (def: 1)\n"
 	       );
 	exit(1);
 }
@@ -101,6 +123,12 @@ static void parse_options(int ac, char **av)
 				break;
 			case 't':
 				sscanf(optarg, "%d", &nrthreads);
+				break;
+			case 'l':
+				sscanf(optarg, "%d", &loop);
+				break;
+			case 'd':
+				dowork = 0;
 				break;
 			case '?':
 			case 'h':
@@ -150,17 +178,18 @@ int main(int argc, char **argv) {
 		if (dt < best_time) {
 			best_time = dt;
 		}
-	}while (runtime > 0 && (get_time() - start_t < runtime));
 
-	// Pretty print output statistics
-	printf("%f us / thread\n", (best_time / (double)nrthreads) * 1000000.0);
-	printf("Number of threads per CPU, {cpuid : nrscheduled}\n {");
-	for(int i=0; i<NPROCS; i++) {
-		if (nr_per_cpus[i])
-			printf("%d : %d, ", i, nr_per_cpus[i]);
-	}
-	printf("}\n");
-	fflush(stdout);
+		// Pretty print output statistics
+		printf("%f us / thread\n", (best_time / (double)nrthreads) * 1000000.0);
+		printf("Number of threads per CPU, {cpuid : nrscheduled}\n {");
+		for(int i=0; i<NPROCS; i++) {
+			if (nr_per_cpus[i])
+				printf("%d : %d, ", i, nr_per_cpus[i]);
+		}
+		printf("\b\b}\n");
+		fflush(stdout);
+
+	}while (--loop);
 
 	return 0;
 }
