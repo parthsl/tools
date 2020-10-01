@@ -33,17 +33,18 @@ def toggle(index, l):
 
     if isno:
         fd.write(feat[-1])
-	print("Turned on ", feat[-1])
+        print("Turned on ", feat[-1])
     else:
         fd.write("NO_"+feat[-1])
-	print("Turned off ",feat[-1])
+        print("Turned off ",feat[-1])
 
     fd.close()
 
-p = read_parse_schedfeat()
+while True:
+    p = read_parse_schedfeat()
 
-if args.index >= 0:
-	toggle(int(args.index), p)
-else:
-	show_menu(p)
-	toggle(int(raw_input()), p)
+    if args.index >= 0:
+        toggle(int(args.index), p)
+    else:
+        show_menu(p)
+        toggle(int(input()), p)
