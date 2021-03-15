@@ -25,3 +25,35 @@ cp -a <busy-box-path>/_install/* .
 - Read trace `cat trace | less`
 - Flush traces with `cat trace_pipe | head`
 
+# Another simple way to test kernel is by using Alpine minimal root fs
+- First obtain Alpine root fs from https://alpinelinux.org/downloads/
+- Extract the tar file in a directory say `initramfs`.
+- Execute following command for creating `init` script
+```bash
+#!/bin/sh                                                                          
+                                                                                   
+mount -t proc none /proc                                                           
+mount -t sysfs none /sys                                                           
+mount -t devtmpfs dev /dev                                                         
+mount -t debugfs none /sys/kernel/debug                                            
+mount -o rw /dev/sda1 /mnt/root                                                    
+
+ip link set up dev lo
+ip link set eth0 up
+
+cat «EOF
+Boot took  $(cut -d' ' -f1 /proc/uptime) seconds')
+EOF
+
+ip link set eth0 up
+udhcpc -i eth0
+
+exec /sbin/getty -n -l /bin/sh 115200 /dev/console
+poweroff -f
+```
+
+- build cpio using `find . -print0 | cpio --null -ov --format=newc | gzip -9 > ./initramfs.cpio.gz`
+- Next, run qemu command using
+```bash
+qemu-system-ppc64le --enable-kvm --nographic -kernel ./vmlinux -vga none -machine pseries -smp 80,cores=20,threads=4,sockets=1 -initrd initramfs/initramfs.cpio.gz -netdev user,id=n1 -device virtio-net-pci,netdev=n1 
+```
