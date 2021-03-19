@@ -21,4 +21,4 @@ echo $delay
 #Now run ebizzy again
 echo "Starting Actual Run"
 echo "./ebizzy -s 4096 -S $3 -t $2 -a $at -i $delay"
-./ebizzy -s 4096 -S $3 -a $at -i $delay -t $2
+exec ./ebizzy -s 4096 -S $3 -a $at -i $delay -t $2
