@@ -192,13 +192,25 @@ void* high_util(void* data)
 	return NULL;
 }
 
+struct duty_cycle {
+	long long unsigned int period;
+	long long unsigned int run_period;
+};
+
 void* low_util(void *data)
 {
 	long long unsigned int sum = 0;
 	struct timeval t1,t2;
-	long long unsigned int period = 100000;
+	long long unsigned int period = 10000;
 	long long unsigned int run_period = 3000;
 	long long unsigned int wall_clock;
+	struct duty_cycle *dc = (struct duty_cycle*) data;
+
+	if (dc) {
+		period = dc->period;
+		run_period = dc->run_period;
+		printf("period = %llu run=%llu\n", period, run_period);
+	}
 
 	pid_t tid = syscall(SYS_gettid);
 
@@ -212,16 +224,18 @@ void* low_util(void *data)
 	}
 
 
-	while(1){
+	while(1) {
 		gettimeofday(&t1,NULL);
-		for(int j=0;j<4*array_size; j++)
-			sum += 45;
 		gettimeofday(&t2,NULL);
-		pthread_mutex_lock(&output_small_lock);
+		while (tvdelta(&t1, &t2) < run_period) {
+			gettimeofday(&t2,NULL);
+		}
 		output_small += array_size;
-		pthread_mutex_unlock(&output_small_lock);
+		
+		gettimeofday(&t2,NULL);
 		wall_clock = tvdelta(&t1,&t2);
-		usleep(run_period-wall_clock);
+		if (period > wall_clock)
+		usleep(period-wall_clock);
 	}
 
 	return NULL;
@@ -232,10 +246,12 @@ void* low_util(void *data)
 enum {
 	HELP_LONG_OPT = 1,
 };
-char *option_string = "t:h:n:bju";
+char *option_string = "t:h:p:r:n:bju";
 static struct option long_options[] = {
 	{"timeout", required_argument, 0, 't'},
 	{"highutil", required_argument, 0, 'h'},
+	{"period", required_argument, 0, 'p'},
+	{"runperiod", required_argument, 0, 'r'},
 	{"threads", required_argument, 0, 'n'},
 	{"bind", no_argument, 0, 'b'},
 	{"jitterify", no_argument, 0, 'j'},
@@ -249,6 +265,8 @@ static void print_usage(void)
 	fprintf(stderr, "turbo_bench usage:\n"
 			"\t-t (--timeout): Execution time for the workload in s (def: 10) \n"
 			"\t -n (--threads): Total threads to be spawned including high_util threads(def: 16)\n"
+			"\t -p (--period): Period of duty cycle for low_util thread (def: 10000 us)\n"
+			"\t -r (--runperiod): Run-period in a duty cycle for low_util thread (def: 3000 us)\n"
 			"\t -h (--highutil): Count of the high utilization threads from -n:total threads (def: 1)\n"
 			"\t -b (--bind): Bind the threads to the cpus as defined low_task_binds & high_task_binds (def: no) \n"
 			"\t -j (--jitterify): Classify low_util threads as jitter\n" 
@@ -257,7 +275,7 @@ static void print_usage(void)
 	exit(1);
 }
 
-static void parse_options(int ac, char **av)
+static void parse_options(int ac, char **av, struct duty_cycle *ptr)
 {
 	int c;
 
@@ -293,6 +311,12 @@ static void parse_options(int ac, char **av)
 				sattr.sched_flags = 0x80;
 				do_syscall = 1;
 				break;
+			case 'p':
+				sscanf(optarg, "%llu", &ptr->period);
+				break;
+			case 'r':
+				sscanf(optarg, "%llu", &ptr->run_period);
+				break;
 			case '?':
 			case HELP_LONG_OPT:
 				print_usage();
@@ -310,13 +334,15 @@ static void parse_options(int ac, char **av)
 
 int main(int argc, char**argv){
 	struct timeval t1,t2;
+	struct duty_cycle *ptr = (struct duty_cycle*)malloc(sizeof(struct duty_cycle));
 	pthread_t *tid;
 	nr_threads = 16;
 	array_size = 10000;
 	highutil_count = 1;
 	timeout = 10000000;
+	ptr->period = 10000; ptr->run_period = 3000; //30% util
 
-	parse_options(argc, argv);
+	parse_options(argc, argv, ptr);
 	printf("Running with array_size=%lld, total threads=%d, highutil_count=%d\n",
 			array_size, nr_threads, highutil_count);
 
@@ -335,7 +361,7 @@ int main(int argc, char**argv){
 			pthread_create(&tid[i], NULL, high_util, NULL);
 		}
 		else{
-			pthread_create(&tid[i],NULL, low_util, NULL);
+			pthread_create(&tid[i],NULL, low_util, ptr);
 		}
 		usleep(1000);
 	}
