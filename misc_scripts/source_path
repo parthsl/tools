@@ -10,7 +10,6 @@ alias stpo="stg pop"
 alias sts="stg series"
 alias stsh="stg show"
 alias cdl="cd ~/Documents/linux/"
-alias cdi="cd ~/Documents/ibm/tools"
 alias du="ncdu --color dark -rr -x --exclude .git --exclude node_modules"
 alias gl="git log --oneline"
 alias scpp="sshpass -p abc123 scp"
@@ -37,6 +36,4 @@ gn() {
 }
 
 export CSCOPE_EDITOR=vim
-
-source ~/path
-alias llm="~/Documents/ibm/tools/lab_access.sh"
+# alias llm="~/Documents/ibm/tools/lab_access.sh"
